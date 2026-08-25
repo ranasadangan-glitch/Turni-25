@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "turnidsp-api",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["--env-file=C:\\Users\\sad_a\\Desktop\\TurniDSP-Platform_32\\server\\.env", "--watch", "C:\\Users\\sad_a\\Desktop\\TurniDSP-Platform_32\\server\\src\\app.js"],
+      "port": 3100
+    }
+  ]
+}

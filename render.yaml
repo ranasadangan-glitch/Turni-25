@@ -1,0 +1,38 @@
+# Render Blueprint for TurniDSP Platform.
+# Deploys a Node web service (Root Directory = server) + a managed PostgreSQL.
+# Render's PostgreSQL requires SSL — the app enables it automatically when
+# DATABASE_URL is present (see server/src/db/pool.js).
+services:
+  - type: web
+    name: turnidsp-platform
+    runtime: node
+    rootDir: server
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start        # runs migrations (SSL-aware) then serves API + frontend
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: turnidsp-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_TTL
+        value: 12h
+      - key: PG_POOL_MAX
+        value: "20"
+      # PGSSL is intentionally not set: SSL turns on automatically with DATABASE_URL.
+      # Set PGSSL=false only if you ever use a non-TLS database.
+      - key: FORCE_HTTPS
+        value: "true"
+        # Render's edge always terminates TLS and reliably sets
+        # X-Forwarded-Proto, so it's safe (and expected) to force HTTPS here.
+        # This is NOT the default anymore — a VPS deployment must opt in only
+        # once its own reverse proxy is confirmed to forward that header.
+
+databases:
+  - name: turnidsp-db
+    plan: starter
+    databaseName: turnidsp
+    user: turnidsp

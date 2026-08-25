@@ -1,0 +1,697 @@
+/* ═════════════════════════════════════════════
+   SCHEDULER-SPECIFIC COMPONENTS
+   (Board, cells, toolbars, bottom KPI bar)
+   ═════════════════════════════════════════════ */
+
+/* Scheduler toolbar */
+.sch-toolbar {
+  height: var(--toolbar-h);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  overflow-x: auto; flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.sch-toolbar::-webkit-scrollbar { display: none; }
+.t-divider { width: 1px; height: 20px; background: var(--border-strong); flex-shrink: 0; }
+.today-btn {
+  padding: 5px 12px; border-radius: 7px;
+  font-size: .76rem; font-weight: 600;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-1); color: var(--text-secondary);
+  cursor: pointer; transition: all var(--transition);
+  white-space: nowrap; flex-shrink: 0;
+}
+.today-btn:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-lt); }
+.nav-arrow {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .92rem; cursor: pointer;
+  background: var(--surface-1); color: var(--text-secondary);
+  transition: all var(--transition); flex-shrink: 0;
+}
+.nav-arrow:hover { border-color: var(--brand); color: var(--brand); }
+.period-label {
+  font-size: .84rem; font-weight: 700;
+  min-width: 130px; text-align: center;
+  white-space: nowrap;
+}
+.view-seg {
+  display: inline-flex;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px; overflow: hidden; flex-shrink: 0;
+}
+.view-seg button {
+  padding: 5px 11px; font-size: .74rem; font-weight: 600;
+  background: var(--surface-1); color: var(--text-muted);
+  transition: all var(--transition);
+}
+.view-seg button.on { background: var(--brand); color: #fff; }
+.view-seg button:hover:not(.on) { background: var(--surface-2); }
+.t-search { position: relative; flex: 1; min-width: 120px; max-width: 190px; }
+.t-search input {
+  width: 100%; padding: 6px 10px 6px 27px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px; font-size: .76rem;
+  background: var(--surface-1); color: var(--text-primary);
+  outline: none; transition: border-color var(--transition);
+}
+.t-search input:focus { border-color: var(--brand); }
+.t-search::before {
+  content: '⌕'; position: absolute; left: 8px; top: 50%;
+  transform: translateY(-50%); color: var(--text-muted);
+  font-size: .88rem; pointer-events: none;
+}
+.t-sel {
+  padding: 6px 9px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px; font-size: .76rem;
+  background: var(--surface-1); color: var(--text-primary);
+  cursor: pointer; outline: none;
+  transition: border-color var(--transition);
+  max-width: 135px;
+}
+.t-sel:focus { border-color: var(--brand); }
+
+/* Scheduler views container */
+.sch-view { display: none; }
+.sch-view.on { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+/* Board */
+.board-outer { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+.board-outer::-webkit-scrollbar { width: 6px; height: 6px; }
+.board-outer::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+/* Column header row */
+.board-thead {
+  display: grid;
+  background: var(--surface-1);
+  border-bottom: 1.5px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: 0 2px 6px rgba(0,0,0,.05);
+}
+.col-emp-h {
+  padding: 9px 14px;
+  font-size: .65rem; font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: .07em;
+  position: sticky; left: 0;
+  background: var(--surface-1); z-index: 10;
+  border-right: 1px solid var(--border);
+  min-width: 205px;
+}
+.col-day-h {
+  padding: 6px 3px; text-align: center;
+  font-size: .70rem; font-weight: 600;
+  color: var(--text-muted);
+  min-width: 50px;
+  border-right: 1px solid var(--border);
+}
+.col-day-h .dow  { display: block; font-weight: 700; color: var(--text-primary); font-size: .74rem; }
+.col-day-h .dnum { font-size: .66rem; }
+.col-day-h.today-h .dow { color: var(--brand); }
+.col-day-h.today-h .dnum {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border-radius: 50%;
+  background: var(--brand); color: #fff; font-weight: 800;
+}
+.col-day-h.wend-h { background: var(--surface-2); }
+.col-tot-h { padding: 8px 6px; text-align: center; font-size: .66rem; font-weight: 700; color: var(--text-muted); min-width: 38px; }
+
+/* Three-row board header (settimana / data / giorno). Each row is its own
+   sticky grid, so they need staggered top offsets and descending z-index or
+   they would pile up on each other while the board scrolls. Heights are fixed
+   to keep the offsets in sync. */
+.board-thead.th-wk, .board-thead.th-dt, .board-thead.th-dw { box-shadow: none; border-bottom: 0; }
+.board-thead.th-wk { top: 0;    z-index: 52; height: 22px; }
+.board-thead.th-dt { top: 22px; z-index: 51; height: 24px; }
+.board-thead.th-dw { top: 46px; z-index: 50; height: 26px;
+  border-bottom: 1.5px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+.board-thead.th-wk .col-emp-h,
+.board-thead.th-dt .col-emp-h,
+.board-thead.th-dw .col-emp-h { padding: 3px 14px; display: flex; align-items: center; }
+.board-thead.th-wk .col-day-h,
+.board-thead.th-dt .col-day-h,
+.board-thead.th-dw .col-day-h { padding: 3px; display: flex; align-items: center; justify-content: center; }
+.board-thead.th-wk .col-tot-h,
+.board-thead.th-dt .col-tot-h,
+.board-thead.th-dw .col-tot-h { padding: 3px 6px; display: flex; align-items: center; justify-content: center; }
+/* Week band: dark strip like the spreadsheet's WEEK row */
+.col-wk-h {
+  text-align: center; font-size: .64rem; font-weight: 700; letter-spacing: .05em;
+  background: var(--text-primary); color: #fff;
+  border-right: 1px solid rgba(255,255,255,.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.col-day-h .ddate { display: block; font-size: .70rem; font-weight: 700; color: var(--text-primary); }
+.col-day-h.wend-h .ddate, .board-thead.th-dw .col-day-h.wend-h .dow { color: var(--bad); }
+.col-day-h.today-h .ddate {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 19px; height: 19px; padding: 0 4px; border-radius: 9px;
+  background: var(--brand); color: #fff; font-weight: 800;
+}
+
+/* Group header row */
+.group-header-row {
+  display: grid;
+  background: var(--surface-2);
+  border-top: 2px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.gh-cell {
+  padding: 7px 14px;
+  display: flex; align-items: center; gap: 8px;
+  position: sticky; left: 0;
+  background: var(--surface-2); z-index: 5;
+  font-size: .72rem; font-weight: 700;
+  color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em;
+  cursor: pointer; user-select: none;
+}
+.gh-cell:hover { color: var(--brand); }
+.gh-arrow { font-size: .62rem; display: inline-block; transition: transform .18s; }
+.group-block.collapsed .gh-arrow { transform: rotate(-90deg); }
+.gh-dot   { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.gh-count {
+  background: var(--border-strong); color: var(--text-muted);
+  border-radius: 20px; padding: 1px 8px;
+  font-size: .62rem; font-weight: 700;
+}
+
+/* Employee rows */
+.emp-board-row {
+  display: grid;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.emp-board-row:hover { background: rgba(79,70,229,.025); }
+.emp-cell {
+  padding: 5px 14px;
+  display: flex; align-items: center; gap: 8px;
+  position: sticky; left: 0;
+  background: var(--surface-1); z-index: 5;
+  border-right: 1px solid var(--border);
+  min-width: 205px;
+}
+.emp-board-row:hover .emp-cell { background: var(--surface-2); }
+.emp-avatar {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 800; color: #fff;
+}
+.emp-name-text {
+  font-size: .78rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px;
+}
+.emp-sub-text { font-size: .63rem; color: var(--text-muted); white-space: nowrap; }
+.viol-dot { color: var(--bad); font-size: .70rem; flex-shrink: 0; }
+
+/* Shift cells */
+.shift-cell {
+  padding: 3px; min-width: 50px;
+  border-right: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background var(--transition);
+  position: relative;
+}
+.shift-cell:hover { background: rgba(79,70,229,.07); }
+.shift-cell.wend-sc  { background: var(--surface-2); }
+.shift-cell.today-sc { background: rgba(79,70,229,.05); }
+.shift-cell.viol-sc  { background: rgba(220,38,38,.06); }
+
+/* Shift card */
+.shift-card {
+  width: 42px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .67rem; font-weight: 800;
+  border: 1.5px solid transparent;
+  transition: transform .11s, box-shadow .11s;
+  user-select: none; cursor: pointer;
+}
+.shift-card:hover { transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,.16); }
+.shift-card[draggable=true] { cursor: grab; }
+.shift-cell.drag-over { outline: 2.5px solid var(--brand); outline-offset: -2px; background: var(--brand-lt); }
+.shift-cell.copy-over { outline: 2.5px solid var(--ok);    outline-offset: -2px; background: var(--ok-bg); }
+.shift-card.dragging  { opacity: .4; }
+.tot-sc {
+  min-width: 38px; border-right: 1px solid var(--border);
+  text-align: center; font-size: .70rem; font-weight: 700;
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; padding: 3px;
+}
+
+/* Empty board state */
+.board-empty {
+  padding: 50px 20px; text-align: center;
+  color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.board-empty .ei { font-size: 2.5rem; opacity: .3; }
+
+/* Bottom KPI bar */
+/* Compact KPI card row — same design language as the top Ops KPI strip. */
+.sch-bottom-bar {
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: stretch; gap: 6px;
+  padding: 6px 10px; overflow-x: auto; flex-shrink: 0;
+}
+.sch-bottom-bar::-webkit-scrollbar { height: 5px; }
+.bkpi {
+  flex: 1 1 0; min-width: 82px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+  padding: 6px 11px;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong); border-radius: 8px;
+}
+.bkpi:last-child { margin-left: auto; }
+.bkpi-val { font-size: 1.06rem; font-weight: 800; line-height: 1.05; color: var(--text-primary); }
+.bkpi-lbl { font-size: .58rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.bkpi.ok   { border-left-color: var(--ok);    } .bkpi.ok   .bkpi-val { color: var(--ok); }
+.bkpi.bad  { border-left-color: var(--bad);   } .bkpi.bad  .bkpi-val { color: var(--bad); }
+.bkpi.pri  { border-left-color: var(--brand); } .bkpi.pri  .bkpi-val { color: var(--brand); }
+.bkpi.warn { border-left-color: var(--warn);  } .bkpi.warn .bkpi-val { color: var(--warn); }
+@media (max-width: 900px){ .bkpi { min-width: 72px; padding: 5px 8px; } .bkpi-val { font-size: .95rem; } }
+
+/* ═════════════════════════════════════════════
+   LEGACY SCHEDULER INTERNALS
+   (kept for compat with scheduler's HTML rendering)
+   ═════════════════════════════════════════════ */
+.view { display:none; } .view.on { display:block; }
+.chip { display:inline-flex;align-items:center;justify-content:center;padding:2px 8px;border-radius:6px;font-size:.72rem;font-weight:800; }
+.codegrp h4 { font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 5px; }
+.codegrid { display:flex;flex-wrap:wrap;gap:5px; }
+.codegrid button { padding:6px 10px;border-radius:7px;font-size:.75rem;font-weight:700;border:1.5px solid transparent;cursor:pointer;transition:all .12s; }
+.codegrid button.sel { border-color:var(--text-primary); }
+.c-n,.c-name { position:sticky;left:0;background:var(--surface-1);z-index:5; }
+.c-n { min-width:38px;max-width:38px;text-align:center; }
+.c-name { min-width:180px;max-width:220px; }
+.stick { position:sticky;left:0;background:var(--surface-1);z-index:5; }
+.gridwrap { overflow:auto;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r);max-height:calc(100vh - 300px); }
+table.grid { border-collapse:separate;border-spacing:0;font-size:.78rem;white-space:nowrap; }
+table.grid th { background:var(--surface-1);position:sticky;top:0;z-index:10;border-bottom:1.5px solid var(--border);padding:7px 5px;text-align:center;min-width:44px;font-weight:700; }
+table.grid td { padding:3px;border-bottom:1px solid var(--border);border-right:1px solid var(--border); }
+table.grid td.cell { text-align:center;cursor:pointer; }
+table.grid td.cell:hover { background:rgba(79,70,229,.07); }
+table.grid tr.foot td { background:var(--surface-2);font-size:.75rem;padding:4px 5px;text-align:center; }
+table.grid tr.foot .lbl { text-align:left;font-weight:700;color:var(--text-muted);font-size:.72rem;text-transform:uppercase; }
+table.grid tr.empty td { padding:24px;text-align:center;color:var(--text-muted);font-style:italic; }
+.neg { color:var(--bad);font-weight:700; }
+.wend { background:rgba(0,0,0,.02); }
+.today { background:rgba(79,70,229,.06); }
+.viol  { background:rgba(220,38,38,.06); }
+.heat  { display:block;height:3px;border-radius:2px;margin-top:2px; }
+.c-tot,.c-ctr { text-align:center;color:var(--text-muted);font-size:.72rem; }
+/* Three-row planner header (settimana / data / giorno). Every th is
+   position:sticky top:0 by default, so without staggered offsets the three
+   rows would pile on top of each other while the grid scrolls. Heights are
+   explicit so the offsets stay in sync. */
+.weeks th { background:var(--text-primary);color:#fff;font-size:.72rem; }
+table.grid thead tr.weeks th { top:0;    height:20px; padding:2px 5px; }
+table.grid thead tr.dates th { top:20px; height:22px; padding:3px 5px; font-size:.74rem; }
+table.grid thead tr.dows  th { top:42px; height:24px; padding:3px 5px; }
+table.grid thead tr.dows .dow { display:block;font-weight:700;font-size:.72rem;text-transform:capitalize; }
+table.grid thead tr.dates th.wend, table.grid thead tr.dows th.wend { color:var(--bad); }
+.banner { background:var(--warn-bg);border:1px solid var(--warn);color:#7a4a00;border-radius:var(--r);padding:9px 13px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.82rem; }
+.planhead { font-size:1rem;font-weight:700;margin-bottom:8px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap; }
+.planhead small { font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em; }
+.toolbar { display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:10px; }
+.toolbar input[type=search] { padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;min-width:130px;flex:1;max-width:240px; }
+.toolbar select { padding:7px 9px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-1); }
+.btn { background:var(--text-primary);color:#fff;padding:7px 13px;border-radius:8px;font-weight:600;font-size:.82rem;display:inline-flex;align-items:center;gap:5px;cursor:pointer;border:none;transition:all .14s; }
+.btn:active { transform:scale(.97); }
+.btn.ghost { background:var(--surface-1);color:var(--text-primary);border:1px solid var(--border-strong); }
+.btn.ghost:hover { background:var(--surface-2); }
+.btn.warn { background:var(--bad); }
+.btn.amber { background:#F59E0B;color:#1A1A2E; }
+.btn.ok { background:var(--ok); }
+.btn.sm { padding:5px 10px;font-size:.76rem; }
+.btn:disabled { opacity:.4;cursor:not-allowed; }
+.seg { display:inline-flex;border:1.5px solid var(--border-strong);border-radius:7px;overflow:hidden; }
+.seg button { padding:5px 11px;font-weight:600;font-size:.78rem;background:var(--surface-1);color:var(--text-muted);transition:all .14s; }
+.seg button.on { background:var(--brand);color:#fff; }
+.seg button:hover:not(.on) { background:var(--surface-2); }
+.weeknav { display:inline-flex;align-items:center;gap:4px; }
+.weeknav button { padding:5px 9px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-1);font-weight:700; }
+.weeknav span { font-weight:600;font-size:.82rem;min-width:160px;text-align:center; }
+.chartcard { background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:14px; }
+.chartcard h3 { font-size:.85rem;font-weight:700;margin-bottom:2px; }
+.chartcard .sub { font-size:.72rem;color:var(--text-muted);margin-bottom:10px; }
+.an-kpis { display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px; }
+.an-kpi { background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center; }
+.an-kpi .val { font-size:1.5rem;font-weight:800;color:var(--brand);margin-bottom:2px; }
+.an-kpi .lbl { font-size:.72rem;color:var(--text-muted);font-weight:600; }
+
+/* ── Left employee-filter panel (spec: LEFT PANEL) ───────────────── */
+.plan-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.plan-body .board-outer { min-width: 0; }   /* allow horizontal scroll in flex row */
+.sched-filters {
+  width: 232px; flex-shrink: 0; border-right: 1px solid var(--border);
+  background: var(--surface-1); padding: 12px; overflow: auto;
+  display: flex; flex-direction: column; gap: 5px;
+  transition: width .18s ease, padding .18s ease;
+}
+.sched-filters.collapsed { width: 0; padding: 0; border-right: none; overflow: hidden; }
+.sched-filters.collapsed > * { display: none !important; }
+.sf-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-muted); font-weight: 700; margin-bottom: 4px;
+}
+.sf-reset { border: none; background: transparent; color: var(--brand); font-size: .7rem; cursor: pointer; font-weight: 600; }
+.sf-reset:hover { text-decoration: underline; }
+.sf-lbl { font-size: .64rem; color: var(--text-muted); font-weight: 600; margin-top: 5px; }
+.sf-sel, .sf-search, .sf-search input { width: 100%; box-sizing: border-box; }
+.sf-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* ══ Horizontal Excel-style filter bar (sticky, above the grid) ═══════ */
+.sched-filterbar { position: sticky; top: 0; z-index: 30; background: var(--surface-1);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sfb-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 5px 12px; }
+.sfb-nav { display: flex; align-items: center; gap: 5px; }
+.sfb-div { width: 1px; align-self: stretch; min-height: 24px; background: var(--border); margin: 0 3px; }
+.sfb-today { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 11px;
+  border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 7px;
+  font-size: .74rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.sfb-today:hover { filter: brightness(1.05); }
+.sfb-sel { height: 30px; border: 1px solid var(--border-strong); background: var(--surface-1);
+  color: var(--text-primary); border-radius: 7px; font-size: .74rem; padding: 0 6px; cursor: pointer; max-width: 190px; }
+.sfb-sel:focus { outline: none; border-color: var(--brand); }
+/* Excel-style multi-select dropdown */
+.sfb-ms { position: relative; }
+.sfb-ms-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+  border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--text-secondary);
+  border-radius: 7px; font-size: .74rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sfb-ms-btn:hover { background: var(--surface-2); }
+.sfb-ms.active .sfb-ms-btn { border-color: var(--brand); color: var(--brand); background: var(--brand-lt); }
+.sfb-ms-lbl { font-weight: 700; }
+.sfb-ms-badge { font-size: .68rem; color: var(--text-muted); max-width: 120px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.sfb-ms.active .sfb-ms-badge { color: var(--brand); }
+.sfb-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 200; width: 230px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 8px; }
+.sfb-pop-search input { width: 100%; box-sizing: border-box; height: 28px; border: 1px solid var(--border);
+  border-radius: 6px; padding: 0 8px; font-size: .74rem; background: var(--surface-2); }
+.sfb-pop-actions { display: flex; gap: 6px; margin: 7px 0; }
+.sfb-pop-actions button { flex: 1; height: 26px; border: 1px solid var(--border); background: var(--surface-2);
+  border-radius: 6px; font-size: .7rem; font-weight: 600; cursor: pointer; color: var(--text-secondary); }
+.sfb-pop-actions button:hover { background: var(--brand-lt); color: var(--brand); }
+.sfb-pop-list { max-height: 240px; overflow-y: auto; }
+.sfb-opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px;
+  font-size: .76rem; cursor: pointer; }
+.sfb-opt:hover { background: var(--surface-2); }
+.sfb-opt input { accent-color: var(--brand); width: 15px; height: 15px; }
+.sfb-pop-empty { padding: 10px; text-align: center; color: var(--text-muted); font-size: .74rem; }
+.sfb-search { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px;
+  border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-1); }
+.sfb-search span { color: var(--text-muted); font-size: .78rem; }
+.sfb-search input { border: none; outline: none; background: transparent; font-size: .74rem;
+  width: 170px; color: var(--text-primary); }
+.sfb-count { margin-left: auto; font-size: .74rem; color: var(--text-muted); white-space: nowrap; }
+.sfb-count b { color: var(--text-primary); font-size: .82rem; }
+.sfb-reset { height: 30px; padding: 0 11px; border: 1px solid var(--border-strong); background: var(--surface-1);
+  color: var(--text-secondary); border-radius: 7px; font-size: .74rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sfb-reset:hover { border-color: var(--bad); color: var(--bad); }
+@media (max-width: 720px){ .sfb-search input { width: 110px; } .sfb-count { margin-left: 0; } }
+
+/* ══ Excel-style per-day column AutoFilter ═══════════════════════════ */
+/* ▼ button in each day header (sticky with the header row). */
+.col-day-h .colf-btn {
+  border: none; background: transparent; cursor: pointer; padding: 0 1px; margin-left: 2px;
+  font-size: .6rem; line-height: 1; color: var(--text-muted); border-radius: 3px; flex: 0 0 auto;
+}
+.col-day-h .colf-btn:hover { background: var(--surface-2); color: var(--text-secondary); }
+.col-day-h .colf-btn.active { color: #fff; background: var(--brand); }        /* blue icon when filtered (spec §6) */
+.board-thead.th-dt .col-day-h { gap: 1px; }
+/* Popup (anchored under the column, position:fixed set inline). */
+.colf-pop {
+  /* Rendered on <body> as position:fixed so no scheduler scroll container /
+     sticky header / table can clip it; z-index clears all app chrome
+     (ctxMenu 700, undoBar 600, hints 700). Height capped to the viewport so a
+     long value list scrolls internally instead of overflowing off-screen. */
+  position: fixed; z-index: 100000; width: 236px; background: var(--surface-1);
+  border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.28);
+  padding: 8px; font-size: .78rem; display: flex; flex-direction: column; gap: 7px;
+  max-height: calc(100vh - 16px);
+}
+.colf-h { font-size: .66rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); font-weight: 700; }
+.colf-h b { color: var(--text-primary); }
+.colf-search { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
+.colf-search span { color: var(--text-muted); font-size: .74rem; }
+.colf-search input { border: none; outline: none; background: transparent; width: 100%; font-size: .76rem; color: var(--text-primary); }
+.colf-all { display: flex; align-items: center; gap: 7px; padding: 4px 4px; border-bottom: 1px solid var(--border);
+  font-size: .74rem; cursor: pointer; }
+.colf-all input, .colf-opt input { accent-color: var(--brand); width: 15px; height: 15px; flex: 0 0 auto; }
+.colf-list { max-height: 232px; overflow-y: auto; display: flex; flex-direction: column; }
+.colf-opt { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 6px; cursor: pointer; }
+.colf-opt:hover { background: var(--surface-2); }
+.colf-code { font-weight: 700; color: var(--text-primary); }
+.colf-lbl { font-size: .68rem; color: var(--text-muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.colf-empty { padding: 12px; text-align: center; color: var(--text-muted); }
+.colf-foot { display: flex; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.colf-clear { flex: 1; height: 30px; border: 1px solid var(--border-strong); background: var(--surface-1);
+  color: var(--text-secondary); border-radius: 7px; font-size: .74rem; font-weight: 600; cursor: pointer; }
+.colf-clear:hover { border-color: var(--bad); color: var(--bad); }
+.colf-apply { flex: 1; height: 30px; border: 1px solid var(--brand); background: var(--brand); color: #fff;
+  border-radius: 7px; font-size: .74rem; font-weight: 700; cursor: pointer; }
+.colf-apply:hover { filter: brightness(1.05); }
+/* Toolbar "Clear all column filters" chip. */
+.colf-clearall { border-color: var(--brand) !important; color: var(--brand) !important; }
+.colf-clearall .colf-n { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 2px;
+  background: var(--brand); color: #fff; border-radius: 20px; font-size: .66rem; text-align: center; }
+
+/* Contract-expiry locked cells — reuse OFF style, add a subtle lock cue. */
+.shift-cell.sc-expired { cursor: not-allowed; }
+.shift-card.sc-lock { opacity: .8; font-size: .62rem; font-weight: 700; letter-spacing: .02em;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,.05) 4px, rgba(0,0,0,.05) 8px); }
+
+/* ══ Excel-style freeze panes: single internal scroller ═════════════
+   #schedulerBoard MUST be a flex column so #boardOuter (flex:1, overflow:auto)
+   becomes the ONE scroll container for BOTH axes. Then the sticky header
+   (top), employee column (left) and SEM column (right) freeze against it, and
+   the bottom KPI bar + forecast footer (flex-shrink:0 siblings BELOW the
+   scroller) stay visible at all times — no JS. The inline display:flex on the
+   element is cleared by router.js (style.display=''), so this rule is the
+   fallback that keeps it flex; home mode still hides it via inline display:none. */
+#schedulerBoard { display: flex; flex-direction: column; }
+
+/* ══ Sticky employee corner + SEM column · spec §4 ═══════════════════
+   Headers already freeze vertically and .emp-cell/.gh-cell freeze the
+   employee column on the left. These add the missing pieces so nothing
+   glitches when scrolling both axes at once:
+   • the "DAS / Servizio" header corner freezes on the left too
+   • the SEM (total) column freezes on the right, header + body        */
+.board-thead .col-emp-h {
+  position: sticky; left: 0; z-index: 3;
+  background: var(--surface-1);
+}
+.board-thead .col-tot-h {
+  position: sticky; right: 0; z-index: 3;
+  background: var(--surface-1); border-left: 1px solid var(--border);
+}
+.tot-sc {
+  position: sticky; right: 0; z-index: 5;
+  background: var(--surface-1); border-left: 1px solid var(--border);
+}
+.emp-board-row:hover .tot-sc { background: #FAFAFE; }
+
+/* ══ Higher row density · spec §5 (~30% more rows, still readable) ═══
+   Scoped under #boardInner so these win over employees.css (.emp-avatar
+   is defined there too and loads later — it was inflating board rows).  */
+#boardInner .emp-cell   { padding: 3px 12px; }
+#boardInner .emp-avatar { width: 22px; height: 22px; border-radius: 6px; font-size: .6rem; }
+#boardInner .emp-name-text { font-size: .74rem; max-width: 118px; }
+#boardInner .emp-sub-text  { font-size: .61rem; }
+#boardInner .shift-cell { padding: 2px; }
+#boardInner .shift-card { width: 38px; height: 22px; font-size: .64rem; }
+#boardInner .tot-sc     { padding: 2px 3px; }
+
+/* Make the board content as wide as its columns so the grid rows are full
+   content-width; without this the row boxes are only viewport-wide and
+   position:sticky left-columns clamp to the box instead of the scrollport
+   (employee column wouldn't freeze while scrolling right). */
+#boardInner { min-width: max-content; }
+
+/* ══ Sticky forecast/coverage table · headers + Service + TOT ═══════
+   Mirrors the scheduler: the date/day header row stays on top and the
+   Service column (+ TOT) stay visible while scrolling the forecast grid. */
+#v-cov { position: relative; }
+#covTbl thead tr:not(.wkrow) th {
+  position: sticky; top: 0; z-index: 5; background: var(--surface-1);
+}
+#covTbl thead tr:not(.wkrow) th:first-child {
+  left: 0; z-index: 6;
+}
+#covTbl thead tr:not(.wkrow) th:last-child { right: 0; z-index: 6; }
+#covTbl td.svc {
+  position: sticky; left: 0; z-index: 4;
+  background: var(--surface-1); box-shadow: 1px 0 0 var(--border);
+}
+#covTbl tbody tr:not(.sec) td:last-child {
+  position: sticky; right: 0; z-index: 4;
+  background: var(--surface-1); box-shadow: -1px 0 0 var(--border);
+}
+
+/* Forecast table gets its own bounded scroll box so sticky header + Service
+   column bind to it (single scroll container, both axes). Day cells get a
+   min-width so wider ranges (2/4 weeks, month) overflow and actually scroll. */
+.cov-scroll { overflow: auto; max-height: calc(100vh - var(--header-h, 56px) - 190px); }
+#covTbl th, #covTbl td { min-width: 34px; }
+#covTbl th:first-child, #covTbl td.svc { min-width: 150px; }
+
+/* ══ Scheduler zoom control · spec §8 ═══════════════════════════════ */
+.zoom-ctrl {
+  display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0;
+  border: 1.5px solid var(--border-strong); border-radius: 7px;
+  padding: 1px; background: var(--surface-1);
+}
+.zoom-ctrl #zoomLbl {
+  font-size: .72rem; font-weight: 600; color: var(--text-secondary);
+  min-width: 38px; text-align: center; user-select: none;
+}
+.zoom-btn {
+  width: 24px; height: 22px; border-radius: 5px; border: none;
+  background: transparent; color: var(--text-secondary);
+  font-size: .95rem; font-weight: 700; cursor: pointer; line-height: 1;
+}
+.zoom-btn:hover { background: var(--surface-2); color: var(--brand); }
+
+/* ══ Virtual scrolling · spec §6 ════════════════════════════════════
+   When windowing is active (#boardInner.v-on) rows have a fixed height so
+   the spacer math (top/bottom filler) stays exact and scrolling is smooth
+   for 1,500+ rows. Only the visible window of rows lives in the DOM. */
+#boardInner.v-on .emp-board-row   { height: 35px; }
+#boardInner.v-on .group-header-row{ height: 31px; }
+#vTop, #vBot { width: 1px; }
+
+/* Rows are now flat (no .group-block wrapper) so the collapse arrow rotates
+   off the header row's own class. */
+.group-header-row.collapsed .gh-arrow { transform: rotate(-90deg); }
+
+/* ══ Operations Control Center — top KPI strip ══════════════════════ */
+.ops-kpi {
+  display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto;
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ops-kpi::-webkit-scrollbar { height: 5px; }
+.ops-kpi:empty { display: none; }
+.opsk {
+  flex: 1 1 0; min-width: 96px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 12px; border-left: 3px solid var(--border-strong);
+}
+.opsk-v { font-size: 1.3rem; font-weight: 800; line-height: 1.1; color: var(--text-primary); }
+.opsk-l { font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); font-weight: 600; margin-top: 2px; white-space: nowrap; }
+.opsk.ok   { border-left-color: var(--ok); }
+.opsk.warn { border-left-color: var(--warn); }
+.opsk.bad  { border-left-color: var(--bad); }
+.opsk.muted { opacity: .6; }
+.opsk.muted .opsk-v { font-size: 1rem; color: var(--text-muted); }
+
+/* ══ Forecast Summary footer — full-width, column-aligned ══════════
+   The first (summary) column fills the whole left area (filter panel +
+   employee column) via --grid-cols-footer, so there is NO blank gap and the
+   day columns stay aligned with the grid above. One horizontal scroll,
+   synced with the board; summary column and total stay frozen. */
+.fcd-footer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 -2px 6px rgba(0,0,0,.05); }
+.fcd-title {
+  padding: 5px 14px; font-size: .62rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-muted);
+  border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.fcd-scroll { overflow-x: auto; overflow-y: hidden; }
+.fcd-scroll::-webkit-scrollbar { height: 0; }   /* driven by the board scroll */
+.fcd-inner { min-width: max-content; }
+.fcd-row {
+  display: grid; grid-template-columns: var(--grid-cols-footer, var(--grid-cols));
+  align-items: center; height: 22px; font-size: .68rem; border-bottom: 1px solid var(--border);
+}
+.fcd-row:last-child { border-bottom: none; }
+.fcd-dates, .fcd-plan, .fcd-delta { background: var(--surface-1); }
+.fcd-fore { background: var(--warn-bg); }
+.fcd-lbl {
+  position: sticky; left: 0; z-index: 2; background: inherit;
+  padding: 0 14px; height: 100%; display: flex; align-items: center;
+  font-weight: 700; font-size: .64rem; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-secondary); border-right: 1px solid var(--border);
+}
+.fcd-cell { text-align: center; font-weight: 600; }
+.fcd-tot {
+  position: sticky; right: 0; z-index: 2; background: inherit;
+  height: 100%; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; border-left: 1px solid var(--border);
+}
+.fcd-fore .fcd-cell, .fcd-fore .fcd-lbl { color: var(--warn); }
+.fcd-dates .fcd-cell { color: var(--text-muted); font-weight: 700; }
+.fcd-plan .fcd-cell { color: var(--text-primary); }
+.fcd-cell.d-neg,  .fcd-tot.d-neg  { color: var(--bad); }
+.fcd-cell.d-pos,  .fcd-tot.d-pos  { color: var(--brand); }   /* blue/indigo */
+.fcd-cell.d-zero, .fcd-tot.d-zero { color: var(--ok); }
+
+/* Forecast footer — editable inputs, weekly band, service selector */
+.fcd-svc { margin-left: 8px; font-size: .68rem; padding: 1px 6px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--surface-1); color: var(--text-primary); vertical-align: middle; }
+.fcd-wkrow { background: var(--surface-2); height: 18px; }
+.fcd-wk { display: flex; align-items: center; justify-content: center; font-size: .58rem; font-weight: 800; letter-spacing: .03em; color: var(--text-secondary); border-right: 1px solid var(--border); text-transform: uppercase; }
+.fcd-fore .fcd-cell { padding: 0 1px; }
+.fcd-inp {
+  width: 100%; height: 18px; border: 1px solid transparent; border-radius: 4px;
+  text-align: center; font-size: .68rem; font-weight: 700; color: var(--warn);
+  background: transparent; -moz-appearance: textfield; padding: 0;
+}
+.fcd-inp::-webkit-outer-spin-button, .fcd-inp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fcd-inp:hover { border-color: var(--border-strong); background: var(--surface-1); }
+.fcd-inp:focus { border-color: var(--brand); background: var(--surface-1); outline: none; }
+.fcd-cov .fcd-cell { color: var(--text-muted); font-weight: 700; }
+
+/* Week separators (§3): a clear vertical divider at the start of each WK group,
+   drawn on the header rows, body cells and the SETT. group header so the line is
+   continuous down the board. Layout-safe (global box-sizing: border-box). */
+.col-day-h.wk-sep,
+.col-wk-h.wk-sep,
+.shift-cell.wk-sep { border-left: 2px solid var(--border-strong); }
+
+/* Employee live-search: clear button, match highlight, count emphasis */
+.sfb-search-x { border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: .78rem; line-height: 1; padding: 0 2px; }
+.sfb-search-x:hover { color: var(--bad); }
+mark.q-hl { background: color-mix(in srgb, var(--brand) 38%, transparent); color: inherit;
+  border-radius: 2px; padding: 0 1px; }
+.sfb-count-hl { color: var(--brand); }
+
+/* Excel filters — extended columns (Employee / Week / SEM) */
+.col-emp-hf { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.col-tot-hf { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.col-tot-hf > span { font-size: .62rem; }
+/* .colx-btn reuses .colf-btn styling (both classes are set on the element) */
+.colx-sortrow { display: flex; gap: 6px; padding: 6px 8px 2px; }
+.colx-sort { flex: 1; border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--text);
+  border-radius: 6px; padding: 4px 6px; font-size: .74rem; cursor: pointer; }
+.colx-sort:hover { border-color: var(--brand); }
+.colx-sort.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.colx-grp { font-size: .64rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+  padding: 8px 8px 2px; font-weight: 700; }
+.colx-sortline { display: flex; align-items: center; gap: 6px; padding: 3px 8px; font-size: .78rem; }
+.colx-sortline > span { flex: 1; }
+.colx-sortline .colx-sort { flex: 0 0 30px; }
+
+/* ── Board polish: selected row · hover · today column · compact toolbar ── */
+.emp-board-row:hover { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+.emp-board-row.emp-row-sel,
+.emp-board-row.emp-row-sel:hover { background: color-mix(in srgb, var(--brand) 13%, transparent); }
+.emp-board-row.emp-row-sel .emp-cell {
+  background: color-mix(in srgb, var(--brand) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+/* Clearer "today" column (header + body cells share the same brand tint) */
+.shift-cell.today-sc { background: color-mix(in srgb, var(--brand) 9%, transparent); }
+.col-day-h.today-h { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+/* Compact filter-bar controls → shorter toolbar */
+.sfb-sel, .sfb-ms-btn, .sfb-today { height: 28px; }
+.sfb-div { min-height: 22px; }

@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TurniDSP — Piattaforma</title>
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/scheduler.css">
+<link rel="stylesheet" href="css/utilities.css">
+<link rel="stylesheet" href="css/employees.css">
+<link rel="stylesheet" href="css/responsive.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Global UI chrome ── -->
+<div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
+<div id="autosaveIndicator"><span id="autosaveIcon">⏳</span><span id="autosaveText">Salvataggio…</span></div>
+<div id="undoBar">
+  <button class="undo-btn" id="undoBtn" onclick="spaDoUndo()" title="Ctrl+Z" disabled>↩ Annulla</button>
+  <button class="undo-btn" id="redoBtn" onclick="spaDoRedo()" title="Ctrl+Shift+Z" disabled>↪ Ripeti</button>
+</div>
+<div id="kbdHint"></div>
+
+<!-- Context menu (scheduler cells) -->
+<div id="ctxMenu">
+  <div class="ctx-item" onclick="boardCtxAction('edit')">✏️ Modifica</div>
+  <div class="ctx-item" onclick="boardCtxAction('copy')">📋 Copia</div>
+  <div id="ctx-paste" class="ctx-item" onclick="boardCtxAction('paste')" style="display:none">📌 Incolla</div>
+  <div class="ctx-item" onclick="boardCtxAction('duplicate')">⊕ Duplica settimana</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="boardCtxAction('delete')">🗑 Svuota</div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     APP SHELL — one layout for everything
+     ════════════════════════════════════════════ -->
+<div class="app-shell">
+
+  <!-- ── Sidebar (app-nav) ── -->
+  <nav class="app-nav" id="appNav" role="navigation" aria-label="Navigazione principale">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">🚚</div>
+      <div>
+        <div class="nav-brand-name">TurniDSP</div>
+        <div class="nav-brand-sub">Global One S.p.A.</div>
+      </div>
+    </div>
+
+    <!-- Grouped navigation. Each item calls go('<key>') which routes to the
+         right screen (reusing existing sections / scheduler sub-views /
+         settings tabs) or a placeholder for sections not built yet. -->
+    <!-- Grouped, collapsible enterprise navigation. Every item keeps its
+         data-nav + go('<key>') so routes/permissions/active-highlighting are
+         unchanged; groups only reorganise how they are displayed. -->
+    <button class="nav-item nav-top active" data-nav="home" onclick="go('home')"><span class="nav-item-icon">🏠</span>Dashboard</button>
+
+    <div class="nav-group" data-group="personale">
+      <button class="nav-group-h" onclick="toggleNavGroup('personale')"><span class="nav-item-icon">👥</span><span class="nav-group-lbl">Personale</span><span class="nav-chev">▾</span></button>
+      <div class="nav-group-body">
+        <button class="nav-item" data-nav="dipendenti"   onclick="go('dipendenti')">Dipendenti</button>
+        <button class="nav-item adminonly" data-nav="contratti-cfg" onclick="go('contratti-cfg')">Contratti</button>
+        <button class="nav-item" data-nav="team"         onclick="go('team')">Team</button>
+        <button class="nav-item adminonly" data-nav="ruoli" onclick="go('ruoli')">Ruoli</button>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="turni">
+      <button class="nav-group-h" onclick="toggleNavGroup('turni')"><span class="nav-item-icon">📅</span><span class="nav-group-lbl">Turni</span><span class="nav-chev">▾</span></button>
+      <div class="nav-group-body">
+        <button class="nav-item" data-nav="scheduler" onclick="go('scheduler')">Pianificazione</button>
+        <button class="nav-item" data-nav="forecast"  onclick="go('forecast')">Forecast</button>
+        <button class="nav-item" data-nav="assenze"   onclick="go('assenze')">Assenze</button>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="operativita">
+      <button class="nav-group-h" onclick="toggleNavGroup('operativita')"><span class="nav-item-icon">🚚</span><span class="nav-group-lbl">Operatività</span><span class="nav-chev">▾</span></button>
+      <div class="nav-group-body">
+        <button class="nav-item adminonly" data-nav="sedi"    onclick="go('sedi')">Filiali</button>
+        <button class="nav-item adminonly" data-nav="servizi" onclick="go('servizi')">Servizi</button>
+        <button class="nav-item adminonly" data-nav="legenda" onclick="go('legenda')">Codici</button>
+        <button class="nav-item" data-nav="rotte"       onclick="go('rotte')">Rotte</button>
+        <button class="nav-item" data-nav="performance" onclick="go('performance')">Performance</button>
+        <button class="nav-item" data-nav="kpi"         onclick="go('kpi')">KPI</button>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="report">
+      <button class="nav-group-h" onclick="toggleNavGroup('report')"><span class="nav-item-icon">📊</span><span class="nav-group-lbl">Report</span><span class="nav-chev">▾</span></button>
+      <div class="nav-group-body">
+        <button class="nav-item" data-nav="report"  onclick="go('report')">Report</button>
+        <button class="nav-item adminonly" data-nav="analisi" onclick="go('analisi')">Analisi</button>
+        <button class="nav-item adminonly" data-nav="esportazioni" onclick="go('esportazioni')">Esporta</button>
+      </div>
+    </div>
+
+    <div class="nav-group adminonly" data-group="admin">
+      <button class="nav-group-h" onclick="toggleNavGroup('admin')"><span class="nav-item-icon">⚙️</span><span class="nav-group-lbl">Amministrazione</span><span class="nav-chev">▾</span></button>
+      <div class="nav-group-body">
+        <button class="nav-item adminonly" data-nav="utenti"  onclick="go('utenti')">Utenti</button>
+        <button class="nav-item adminonly" data-nav="audit"   onclick="go('audit')">Audit Log</button>
+        <button class="nav-item adminonly" data-nav="importa" onclick="go('importa')">Importa</button>
+        <button class="nav-item adminonly" data-nav="impostazioni" onclick="go('impostazioni')">Impostazioni</button>
+      </div>
+    </div>
+
+    <div class="nav-footer">
+      <div class="nav-user" style="margin-bottom:8px">
+        <div class="nav-user-avatar" id="navAvatar">—</div>
+        <div>
+          <div class="nav-user-name" id="navUname">—</div>
+          <div class="nav-user-role" id="navRole">—</div>
+        </div>
+      </div>
+      <div class="nav-sync-chip" id="navSync">🔵 Connesso</div>
+      <div style="padding:4px 8px 2px"><span class="save-pill" id="saveState"></span></div>
+      <button class="nav-logout" onclick="doLogout()"><span>↪</span>Esci</button>
+    </div>
+  </nav>
+
+  <!-- ── Content area ── -->
+  <div class="app-content">
+
+    <!-- ── Shared top header ── -->
+    <header class="app-header" role="banner">
+      <div>
+        <span class="app-header-title" id="pageTitle">Dashboard</span>
+        <span class="app-header-sub"   id="pageSubtitle"></span>
+      </div>
+      <div class="app-header-spacer"></div>
+
+      <!-- Global search -->
+      <div class="header-search">
+        <input class="header-search-input" id="globalSearch"
+               placeholder="Cerca dipendente, ID…" autocomplete="off"
+               oninput="debouncedGlobalSearch(this.value)"
+               onblur="setTimeout(()=>{document.getElementById('searchDropdown').style.display='none'},200)">
+        <div id="searchDropdown" class="header-search-dropdown"></div>
+      </div>
+
+      <!-- Notification bell -->
+      <div class="notif-wrap">
+        <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifiche">
+          🔔<span class="notif-badge" id="notifBadge">0</span>
+        </button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-panel-head">
+            <span>Notifiche</span>
+            <button class="header-btn sm" onclick="markAllRead()" style="font-size:.7rem">Segna lette</button>
+          </div>
+          <div id="notifList"></div>
+        </div>
+      </div>
+
+      <!-- Workspace header controls — always visible, one workspace, no toggling -->
+      <div id="workspaceHeader" style="display:flex;align-items:center;gap:8px">
+        <span class="role-badge"><span class="role-dot"></span><span id="roleTxt">Team</span></span>
+        <button class="branch-chip teamonly" id="filChip" onclick="openFilialePick()">
+          📍 <span id="filChipTxt">—</span> ▾
+        </button>
+        <select id="branchSel" class="sel" style="font-size:.78rem">
+          <option value="">Tutte le filiali</option>
+        </select>
+        <button class="nav-arrow" onclick="shiftMonth(-1)">‹</button>
+        <span class="period-label" id="monthLabel">—</span>
+        <button class="nav-arrow" onclick="shiftMonth(1)">›</button>
+        <button class="header-btn primary" onclick="refreshAll()">↻ Aggiorna</button>
+      </div>
+
+      <!-- Login button (scheduler legacy) -->
+      <button class="header-btn" id="headerLoginBtn" onclick="toggleLogin()" style="display:none">Accedi</button>
+    </header>
+
+    <!-- ════════════════════════════════════
+         MAIN BODY — all sections live here
+         ════════════════════════════════════ -->
+    <div class="app-body">
+
+      <!-- ══ WORKSPACE ══════════════════════
+           Single scrollable column: overview strip on top (KPIs, charts,
+           forecast, absences, alerts), then the scheduler board below.
+           page-scroll makes the whole section scroll as one document. -->
+      <div class="spa-section active page-scroll" id="sec-scheduler">
+
+        <!-- ── Workspace overview strip: KPIs · Alerts · Activity ──
+             Collapsible. Lives above the toolbar so it's always the
+             first thing a manager sees when opening the workspace,
+             but never competes with the board for space. ──────── -->
+        <div id="workspaceOverview" class="page-pad" style="padding-bottom:0">
+          <div class="page-head" style="margin-bottom:14px">
+            <div>
+              <div class="page-title" id="greetTitle">Riepilogo</div>
+              <div class="page-sub"   id="greetSub"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="date" id="kpiDate" class="inp" style="width:136px;font-size:.78rem;padding:6px 9px">
+              <span id="dspDateLabel" class="text-sm text-muted"></span>
+              <button class="header-btn sm" id="overviewToggle" onclick="toggleOverview()" title="Comprimi/espandi riepilogo">▾ Riepilogo</button>
+            </div>
+          </div>
+
+          <div id="overviewBody">
+            <!-- KPI row -->
+            <div class="kpi-grid" id="kpiGrid">
+              <div class="kpi-card pri skel" style="height:120px"></div>
+              <div class="kpi-card ok  skel fade-in-1" style="height:120px"></div>
+              <div class="kpi-card bad skel fade-in-2" style="height:120px"></div>
+              <div class="kpi-card warn skel fade-in-3" style="height:120px"></div>
+            </div>
+
+            <!-- Alert Center: forecast delta / expiring contracts / attendance / recent activity -->
+            <div class="overview-alert-row">
+              <div class="card card-pad">
+                <div class="section-head">
+                  <span class="section-title">🎯 Forecast vs Pianificato</span>
+                  <span class="badge badge-muted" id="fcBadge">—</span>
+                </div>
+                <div id="fcContent"><div class="skel" style="height:80px;border-radius:8px"></div></div>
+              </div>
+              <div class="card card-pad">
+                <div class="section-head"><span class="section-title">📋 Contratti in scadenza</span></div>
+                <div id="expiryContent"><div class="skel" style="height:80px;border-radius:8px"></div></div>
+              </div>
+              <div class="card card-pad">
+                <div class="section-head"><span class="section-title">👁 Presenza oggi</span></div>
+                <div id="attContent"><div class="skel" style="height:80px;border-radius:8px"></div></div>
+              </div>
+              <div class="card card-pad">
+                <div class="section-head"><span class="section-title">⚡ Attività recente</span></div>
+                <div id="activityList" class="feed-list"><div class="skel" style="height:80px;border-radius:8px"></div></div>
+              </div>
+            </div>
+
+            <!-- Trend charts — render via the existing renderCharts(), reusing _kpiData -->
+            <div class="charts-grid" style="margin-bottom:20px">
+              <div class="chart-card" style="grid-column:span 2">
+                <div class="chart-title">Presenze ultimi 30 giorni</div>
+                <div style="height:200px"><canvas id="chartAtt"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Forecast vs Pianificato (30 gg)</div>
+                <div style="height:200px"><canvas id="chartFc"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Tipi di assenza (90 gg)</div>
+                <div style="height:200px"><canvas id="chartAbs"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">Crescita dipendenti (12 mesi)</div>
+                <div style="height:200px"><canvas id="chartGrow"></canvas></div>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card card-pad mb-4">
+              <div class="section-head"><span class="section-title">⚡ Azioni rapide</span></div>
+              <div id="quickActions" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+            </div>
+
+            <!-- Service Summary — forecast vs planned per service -->
+            <div class="card card-pad mb-4">
+              <div class="section-head">
+                <span class="section-title">🧭 Riepilogo servizi</span>
+                <span class="text-xs text-muted">Forecast vs pianificato per servizio</span>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="tbl" id="svcSummaryTbl">
+                  <thead><tr><th>Servizio</th><th>Forecast</th><th>Pianificati</th><th>Delta</th><th>Copertura</th></tr></thead>
+                  <tbody><tr><td colspan="5"><div class="skel" style="height:22px;border-radius:6px"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Weekly Preview — next 7 days -->
+            <div class="card card-pad mb-4">
+              <div class="section-head">
+                <span class="section-title">📆 Anteprima settimana</span>
+                <span class="text-xs text-muted">Prossimi 7 giorni</span>
+              </div>
+              <div id="weekPreview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px">
+                <div class="skel" style="height:74px;border-radius:8px"></div>
+              </div>
+            </div>
+
+            <!-- Today's Employees -->
+            <div class="card card-pad mb-4">
+              <div class="section-head">
+                <span class="section-title">🧑‍✈️ Dipendenti di oggi</span>
+                <span class="text-xs text-muted" id="todayEmpCount"></span>
+              </div>
+              <div style="overflow-x:auto;max-height:320px">
+                <table class="tbl" id="todayEmpTbl">
+                  <thead><tr><th>Dipendente</th><th>Filiale</th><th>Turno</th><th>Stato</th></tr></thead>
+                  <tbody><tr><td colspan="4"><div class="skel" style="height:22px;border-radius:6px"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Branch coverage heatmap — management view of workforce coverage per filiale -->
+            <div class="card card-pad mb-4">
+              <div class="section-head">
+                <span class="section-title">🗺 Heatmap copertura filiali</span>
+                <span class="text-xs text-muted">Copertura di oggi · click su una filiale per il dettaglio</span>
+              </div>
+              <div id="branchHeatmap" class="branch-heatmap-grid"></div>
+            </div>
+
+            <!-- DSP operations table — clicking a row jumps straight into the board, filtered -->
+            <div class="card card-pad mb-4">
+              <div class="section-head">
+                <span class="section-title">🚚 Operatività per filiale</span>
+                <span class="text-xs text-muted">Click su una riga per filtrare il planner</span>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="tbl" id="dspTbl">
+                  <thead><tr><th>Filiale</th><th>Driver totali</th><th>In turno</th><th>Copertura</th></tr></thead>
+                  <tbody><tr><td colspan="4"><div class="skel" style="height:22px;border-radius:6px"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Expiry / alert list — clicking a row focuses that employee in the board -->
+            <div class="card card-pad mb-4">
+              <div class="section-head"><span class="section-title">⏰ Scadenze prossime (60 gg)</span></div>
+              <div style="overflow-x:auto">
+                <table class="tbl" id="alertsTbl">
+                  <thead><tr><th>Dipendente</th><th>Tipo</th><th>Scadenza</th><th>Giorni</th><th>Stato</th></tr></thead>
+                  <tbody><tr><td colspan="5"><div class="skel" style="height:22px;border-radius:6px"></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /workspaceOverview -->
+
+        <!-- Scheduler toolbar -->
+        <div class="sch-toolbar" id="planToolbar">
+          <button class="today-btn" onclick="goToToday()">Oggi</button>
+          <button class="nav-arrow" onclick="shiftWeek(-1)">‹</button>
+          <button class="nav-arrow" onclick="shiftWeek(1)">›</button>
+          <span id="weekNav"></span>
+          <div class="t-divider"></div>
+          <div class="view-seg" id="planModeSeg">
+            <button data-pm="day"   onclick="setPlanMode('day')">Giorno</button>
+            <button class="on" data-pm="week"  onclick="setPlanMode('week')">Settimana</button>
+            <button data-pm="month" onclick="setPlanMode('month')">Mese</button>
+          </div>
+          <div class="t-divider"></div>
+          <div class="zoom-ctrl" title="Zoom scheduler">
+            <button class="zoom-btn" onclick="stepZoom(-1)" aria-label="Riduci">−</button>
+            <span id="zoomLbl">100%</span>
+            <button class="zoom-btn" onclick="stepZoom(1)" aria-label="Aumenta">+</button>
+          </div>
+          <div class="t-divider"></div>
+          <span id="brushChip" class="brush-chip" style="display:none">🖌 <span class="bc-code"></span><button onclick="clearBrush()" title="Esci dal pennello (ESC)">✕</button></span>
+          <div class="app-header-spacer"></div>
+          <!-- Frequent, always-visible: filters toggle + the "More" menu.
+               Advanced/occasional actions live inside More (their ids/handlers
+               are unchanged, so all existing wiring keeps working). -->
+          <button class="header-btn" id="schedFiltersBtn" onclick="toggleSchedFilterBar()" title="Mostra/nascondi filtri">⧉ Filtri</button>
+          <div class="sch-more">
+            <button class="header-btn" id="schedMoreBtn" onclick="toggleSchedMore(event)" aria-haspopup="true" aria-expanded="false" title="Altre azioni">⋯ Altro</button>
+            <div class="sch-more-panel" id="schedMorePanel">
+              <button class="sch-more-item" id="opsToggleBtn" onclick="toggleOpsCenter()">🎛 Centro operativo</button>
+              <button class="sch-more-item" id="fcToggleBtn" onclick="toggleForecastPanel()">📊 Forecast / Copertura</button>
+              <div class="sch-more-sep"></div>
+              <div class="sch-more-head">Cronologia</div>
+              <button class="sch-more-item adminonly" onclick="openVersions()">🗂 Versioni</button>
+              <button class="sch-more-item adminonly" id="verUndoBtn" onclick="undoRestore()" style="display:none">↩ Annulla ripristino</button>
+              <button class="sch-more-item adminonly" onclick="undoGeneratedPlan()">↩ Annulla generazione</button>
+              <div class="sch-more-sep"></div>
+              <button class="sch-more-item adminonly" onclick="openImport()">⬆ Importa dati</button>
+              <button class="sch-more-item adminonly" onclick="openDriver()">＋ Nuovo DAS</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scheduler view container -->
+        <div id="schedulerBoard" style="height:calc(100vh - var(--header-h) - var(--toolbar-h));min-height:500px;display:flex;flex-direction:column;flex-shrink:0">
+          <!-- Planning board -->
+          <div class="sch-view on" id="v-plan">
+            <!-- Floating AI assistant (replaces the old toolbar button; keeps the
+                 aiCount badge id so assistant.js updates it unchanged). -->
+            <button class="ai-fab" id="aiFab" onclick="toggleAssistant()" title="Assistente pianificazione" aria-label="Assistente pianificazione">🤖<span class="ai-fab-badge" id="aiCount" style="display:none">0</span></button>
+            <div id="violBanner" style="display:none;background:var(--bad-bg);border-bottom:1px solid var(--bad);padding:8px 16px;font-size:.8rem"></div>
+            <!-- Horizontal Excel-style filter bar (sticky, above the grid).
+                 The native selects below stay in the DOM (hidden) so the
+                 existing filter logic — refreshFilSelects / populateSchedFilters
+                 / filteredDrivers — keeps working; the bar mirrors them into
+                 multi-select popovers. -->
+            <div class="sched-filterbar" id="schedFilterBar" data-open="0" style="display:none"></div>
+            <div id="schedNativeFilters" hidden aria-hidden="true">
+              <input type="search" id="q" oninput="onFilterChange()" autocomplete="off">
+              <select id="fFiliale" onchange="onFilterChange()"></select>
+              <label id="lblManager"></label><select id="fManager" onchange="onFilterChange()"></select>
+              <select id="fContract" onchange="onFilterChange()"></select>
+              <label id="lblTeam"></label><select id="fTeam" onchange="onFilterChange()"></select>
+              <select id="fService" onchange="onFilterChange()"></select>
+              <select id="fStato" onchange="onFilterChange()">
+                <option value="">Tutti gli stati</option>
+                <option value="turno">In turno</option>
+                <option value="riposo">Riposo (OFF)</option>
+                <option value="assente">Assenti</option>
+                <option value="dispo">Disponibili</option>
+              </select>
+              <div id="sfResult"></div>
+            </div>
+            <div class="plan-body">
+              <div class="board-outer" id="boardOuter">
+                <div id="boardInner">
+                  <div class="board-empty"><div class="ei">🗓️</div><p>Caricamento turni…</p></div>
+                </div>
+              </div>
+            </div>
+            <!-- Bottom KPI bar -->
+            <div class="sch-bottom-bar">
+              <div class="bkpi pri"><div class="bkpi-val" id="kpiDrivers">—</div><div class="bkpi-lbl">Driver</div></div>
+              <div class="bkpi ok"> <div class="bkpi-val" id="kpiPresent">—</div><div class="bkpi-lbl">In turno</div></div>
+              <div class="bkpi bad"><div class="bkpi-val" id="kpiAbsent">—</div><div class="bkpi-lbl">Assenti</div></div>
+              <div class="bkpi warn"><div class="bkpi-val" id="kpiOff">—</div><div class="bkpi-lbl">OFF</div></div>
+              <div class="bkpi">   <div class="bkpi-val" id="kpiFc">—</div><div class="bkpi-lbl" id="kpiFcLbl">Forecast</div></div>
+              <div class="bkpi" id="kpiDeltaTile"><div class="bkpi-val" id="kpiDelta">—</div><div class="bkpi-lbl">Delta</div></div>
+              <div class="bkpi">   <div class="bkpi-val" id="kpiCov">—</div><div class="bkpi-lbl">Copertura</div></div>
+              <div class="bkpi bad"><div class="bkpi-val" id="kpiViol">0</div><div class="bkpi-lbl">Conflitti</div></div>
+              <!-- DB Sync moved to the header status bar (navSync). This tile is
+                   kept (hidden) so board.js can still write to #kpiSyncBar. -->
+              <div class="bkpi" style="display:none">
+                <div class="bkpi-val" id="kpiSyncBar">—</div><div class="bkpi-lbl">Sync</div>
+              </div>
+            </div>
+            <!-- Per-day Forecast vs Planned vs Delta footer, column-aligned with
+                 the board and horizontally scroll-synced with it. -->
+            <div class="fcd-footer" id="fcDeltaFooter">
+              <div class="fcd-title">Riepilogo Forecast
+                <select id="fcdSvc" class="fcd-svc" onchange="renderForecastDeltaFooter()" title="Seleziona un servizio per modificare il forecast"></select>
+              </div>
+              <div class="fcd-scroll" id="fcdScroll"><div class="fcd-inner" id="fcdInner"></div></div>
+            </div>
+          </div>
+
+          <!-- Copertura / Forecast view -->
+          <div class="sch-view" id="v-cov" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Forecast &amp; Copertura <small id="covScope"></small></h1>
+            <select id="covFil" onchange="window._covFil=this.value;renderCov()" class="t-sel" style="margin-bottom:10px"></select>
+            <div id="covKpis" class="kpis" style="margin-bottom:12px"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+              <div class="seg" id="covRangeSeg">
+                <button class="on" data-cr="week" onclick="setCovRange('week')">1 Sett.</button>
+                <button data-cr="2weeks" onclick="setCovRange('2weeks')">2 Sett.</button>
+                <button data-cr="4weeks" onclick="setCovRange('4weeks')">4 Sett.</button>
+                <button data-cr="month" onclick="setCovRange('month')">Mese</button>
+              </div>
+              <div class="weeknav" id="covWeekNav"></div>
+              <div class="seg" id="covMode">
+                <button class="on" data-m="delta" onclick="setCovMode('delta')">Copertura</button>
+                <button data-m="forecast" onclick="setCovMode('forecast')">Forecast (modifica)</button>
+              </div>
+            </div>
+            <div class="cov-scroll" id="covScroll"><table class="grid" id="covTbl"></table></div>
+          </div>
+
+          <!-- DAS view -->
+          <div class="sch-view" id="v-das" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Anagrafica DAS <small id="dasScope"></small></h1>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+              <div class="t-search" style="max-width:220px"><input type="search" id="qDas" placeholder="Cerca…" oninput="renderDas()" autocomplete="off"></div>
+              <select id="aFiliale" onchange="renderDas()" class="t-sel"></select>
+              <select id="aStato" onchange="renderDas()" class="t-sel">
+                <option value="">Tutti</option><option value="active">Attivi</option>
+                <option value="inactive">Inattivi</option><option value="pending">In attesa</option>
+              </select>
+              <button class="btn ghost sm" onclick="exportDas()">⬇ CSV</button>
+            </div>
+            <div style="overflow:auto"><table id="dasTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"><thead></thead><tbody></tbody></table></div>
+          </div>
+
+          <!-- Contratti view -->
+          <div class="sch-view" id="v-contr" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Contratti &amp; Scadenze</h1>
+            <div class="an-kpis" id="contrKpis" style="margin-bottom:14px"></div>
+            <div style="overflow:auto"><table id="contrTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"><thead></thead><tbody></tbody></table></div>
+          </div>
+
+          <!-- Approvazioni (admin) -->
+          <div class="sch-view adminonly" id="v-appr" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Approvazioni DAS</h1><div id="apprList"></div>
+          </div>
+
+          <!-- Config moved to Settings (sec-settings). This view is retained
+               empty so any stray setView('cfg') call is harmless. -->
+          <div class="sch-view adminonly" id="v-cfg" style="overflow:auto;padding:16px"></div>
+
+          <!-- Analisi (admin) -->
+          <div class="sch-view adminonly" id="v-an" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Analisi</h1>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <select id="anFiliale" onchange="renderAnalysis()" class="t-sel"></select>
+              <button class="btn ghost sm" onclick="exportAnalysis()">⬇ CSV</button>
+            </div>
+            <div class="an-kpis" id="anKpis"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="anCharts"></div>
+          </div>
+
+          <!-- Registro (admin) -->
+          <div class="sch-view adminonly" id="v-log" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Registro modifiche</h1>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <div class="t-search" style="max-width:220px"><input type="search" id="qLog" placeholder="Cerca…" oninput="renderLog()" autocomplete="off"></div>
+              <button class="btn ghost sm" onclick="exportLog()">⬇ CSV</button>
+              <button class="btn warn sm adminonly" onclick="clearLog()">🗑 Svuota</button>
+            </div>
+            <div style="overflow:auto"><table id="logTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"></table></div>
+          </div>
+
+          <!-- Legenda -->
+          <div class="sch-view" id="v-leg" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Legenda codici turno</h1>
+            <div style="overflow:auto"><table id="legTbl" style="width:100%;border-collapse:collapse;font-size:.78rem;margin-bottom:14px"></table></div>
+            <h2 style="font-size:.85rem;font-weight:700;margin-bottom:8px">Inquadramenti contrattuali</h2>
+            <div style="overflow:auto"><table id="ctrTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"></table></div>
+          </div>
+
+          <!-- Dati & Sync (admin) -->
+          <div class="sch-view adminonly" id="v-data" style="overflow:auto;padding:16px">
+            <h1 class="planhead">Dati &amp; Sincronizzazione</h1>
+            <p class="text-sm text-muted" style="margin-bottom:14px">Fonte di verità: PostgreSQL. localStorage è solo cache locale.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+              <button class="btn ghost sm" onclick="exportJson()">⬇ Esporta JSON</button>
+              <label class="btn ghost sm">⬆ Importa JSON<input type="file" accept=".json" onchange="importJson(event)" style="display:none"></label>
+              <button class="btn warn sm adminonly" onclick="resetMonth()">🗑 Azzera mese</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <input id="apiUrl" class="inp" placeholder="URL endpoint legacy (opzionale)" style="max-width:340px;font-size:.8rem">
+              <button class="btn ghost sm" onclick="syncPull()">⬇ Pull</button>
+              <button class="btn ghost sm" onclick="syncPush()">⬆ Push</button>
+            </div>
+            <label style="display:flex;align-items:center;gap:7px;font-size:.8rem;cursor:pointer">
+              <input type="checkbox" id="autoGenChk" onchange="toggleAutoGen()">
+              Genera turni automaticamente all'inizio del mese
+            </label>
+            <div id="syncMsg" class="text-sm text-muted mt-2"></div>
+          </div>
+        </div>
+      </div><!-- /sec-scheduler -->
+
+      <!-- ══ PEOPLE ══════════════════════════ -->
+      <div class="spa-section" id="sec-employees" style="flex-direction:row">
+        <!-- People list sidebar -->
+        <aside class="people-sidebar" id="peopleSidebar">
+          <div class="people-sidebar-head">
+            <div class="people-sidebar-search">
+              <span>🔍</span>
+              <input id="empSearch" placeholder="Cerca dipendente…" oninput="filterEmployees(this.value)" autocomplete="off">
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <select id="empBranchFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" onchange="filterEmployees()">
+                <option value="">Tutte le filiali</option>
+              </select>
+              <select id="empStatusFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" onchange="filterEmployees()">
+                <option value="">Tutti</option>
+                <option value="active">Attivi</option>
+                <option value="inactive">Inattivi</option>
+              </select>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span id="empCount" class="text-sm text-muted">—</span>
+              <button class="btn btn-primary btn-sm" onclick="openNewEmployee()">+ Nuovo</button>
+            </div>
+          </div>
+          <div class="people-sidebar-body emp-list" id="empList">
+            <div style="padding:20px" class="skel" style="height:40px;border-radius:8px;margin:8px"></div>
+          </div>
+        </aside>
+
+        <!-- Profile panel -->
+        <div class="people-profile-panel" id="profilePanel">
+          <div class="people-no-selection" id="noSelection">
+            <div style="font-size:3rem">👥</div>
+            <h3>Seleziona un dipendente</h3>
+            <p class="text-sm">Clicca sulla lista a sinistra per vedere il profilo completo</p>
+          </div>
+          <div id="profileContent" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- ══ REPORTS ═════════════════════════ -->
+      <div class="spa-section page-scroll" id="sec-reports" style="padding:22px 24px">
+        <div class="page-head"><div class="page-title">📈 Report</div></div>
+        <div class="charts-grid">
+          <div class="chart-card" style="grid-column:span 2">
+            <div class="chart-title">Presenze ultimi 30 giorni</div>
+            <div style="height:220px"><canvas id="rptChartAtt"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Forecast vs Pianificato</div>
+            <div style="height:220px"><canvas id="rptChartFc"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Tipi assenza (90 gg)</div>
+            <div style="height:220px"><canvas id="rptChartAbs"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Crescita dipendenti</div>
+            <div style="height:220px"><canvas id="rptChartGrow"></canvas></div>
+          </div>
+        </div>
+        <div class="card card-pad mt-4">
+          <div class="section-title mb-2">📁 Esportazioni</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <a class="btn btn-ghost btn-sm" id="rptExpEmp">⬇ Dipendenti Excel</a>
+            <a class="btn btn-ghost btn-sm" id="rptExpFc">⬇ Forecast Excel</a>
+            <a class="btn btn-ghost btn-sm" id="rptExpSch">⬇ Turni Excel</a>
+            <a class="btn btn-ghost btn-sm" id="rptPdfMonth">🖨 Turni mese PDF</a>
+            <a class="btn btn-ghost btn-sm" id="rptPdfAbs">🖨 Assenze PDF</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SETTINGS (admin) ═══════════════ -->
+      <div class="spa-section page-scroll adminonly" id="sec-settings" style="padding:22px 24px">
+        <div class="page-head"><div class="page-title">⚙ Impostazioni</div></div>
+
+        <!-- Config sections are now reached from the left sidebar (Impostazioni
+             group). setCfgTab() shows the matching panel; the tab bar was moved
+             into the menu to avoid duplicate navigation. -->
+        <div id="cfgSectionTitle" style="margin-bottom:16px;font-size:.9rem;font-weight:700;color:var(--text-muted)">Utenti</div>
+
+        <!-- Account tab (user management) -->
+        <div id="settingsAccount">
+          <div class="card card-pad mb-4" style="max-width:700px">
+            <div class="section-title mb-2">👤 Crea account utente</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end">
+              <div><label class="lbl">Username</label><input id="nuUser" class="inp" autocapitalize="off"></div>
+              <div><label class="lbl">Password</label><input id="nuPass" class="inp" type="text"></div>
+              <div><label class="lbl">Nome</label><input id="nuName" class="inp"></div>
+              <div><label class="lbl">Ruolo</label>
+                <select id="nuRole" class="sel" style="width:100%">
+                  <option value="team_leader">Team Leader</option>
+                  <option value="osm">OSM</option>
+                  <option value="hr_manager">HR Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div><label class="lbl">Filiali</label><select id="nuBranches" class="sel" style="width:100%" multiple size="3"></select></div>
+              <div><button class="btn btn-primary w-full" onclick="createUser()">+ Crea account</button></div>
+            </div>
+            <div id="nuMsg" class="text-sm mt-2"></div>
+          </div>
+          <div class="card card-pad" style="max-width:700px">
+            <div class="section-title mb-2">Lista utenti</div>
+            <div style="overflow-x:auto"><table class="tbl" id="usersTbl"></table></div>
+          </div>
+        </div>
+
+        <!-- Config tabs (Filiali / Legenda / Servizi / Contratti / Forecast)
+             render here via modules/settings/config-ui.js -->
+        <div id="cfgBody" style="display:none"></div>
+      </div>
+
+      <!-- Assenze (HR) -->
+      <div class="spa-section page-scroll" id="sec-absences" style="padding:22px 24px"></div>
+
+      <!-- Documenti (HR) -->
+      <div class="spa-section page-scroll" id="sec-documents" style="padding:22px 24px"></div>
+
+      <!-- Template Turni -->
+      <div class="spa-section page-scroll" id="sec-templates" style="padding:22px 24px"></div>
+
+      <!-- Audit Log -->
+      <div class="spa-section page-scroll" id="sec-auditlog" style="padding:22px 24px"></div>
+
+      <!-- Ruoli & Permessi -->
+      <div class="spa-section page-scroll" id="sec-roles" style="padding:22px 24px"></div>
+
+      <!-- Forecast (top-level page) -->
+      <div class="spa-section page-scroll" id="sec-forecast" style="padding:22px 24px"></div>
+
+      <!-- Generic placeholder for menu items whose screen isn't built yet
+           (Template Turni, Presenze, Documenti, Ruoli & Permessi). -->
+      <div class="spa-section page-scroll" id="sec-placeholder" style="padding:22px 24px">
+        <div class="page-head"><div class="page-title" id="phTitle">—</div></div>
+        <div class="card card-pad" style="max-width:560px;text-align:center;padding:40px 24px">
+          <div style="font-size:2.4rem;margin-bottom:10px" id="phIcon">🚧</div>
+          <div class="section-title" id="phName" style="margin-bottom:6px">—</div>
+          <p class="text-sm text-muted" id="phDesc" style="margin-bottom:16px">—</p>
+          <div id="phAction"></div>
+        </div>
+      </div>
+
+    </div><!-- /app-body -->
+  </div><!-- /app-content -->
+</div><!-- /app-shell -->
+
+<!-- ── Shift editor (right drawer) ── -->
+<div id="slidePanel">
+  <div class="sp-head">
+    <div><h3 id="spTitle">Turno</h3><p id="spSub">—</p></div>
+    <button class="sp-close" onclick="closePanel()" title="ESC">✕</button>
+  </div>
+  <div class="sp-body">
+    <div id="spConflicts"></div>
+    <div class="sp-field">
+      <label>Codice turno</label>
+      <div class="sp-service-grid" id="spServiceGrid"></div>
+    </div>
+    <div class="sp-field">
+      <label>Cerca / inserisci codice</label>
+      <input id="spCodeInput" list="codeList" placeholder="es. SameA, OFF, M…" autocomplete="off">
+    </div>
+    <div class="sp-field">
+      <label>Note</label>
+      <textarea id="spNote" placeholder="Note opzionali…"></textarea>
+    </div>
+    <hr class="divider">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="sp-field"><label>Driver</label><select id="spDriver"></select></div>
+      <div class="sp-field"><label>Giorno</label><input id="spDay" type="number" min="1" max="31"></div>
+    </div>
+    <div class="sp-field">
+      <label>Info driver</label>
+      <div id="spDriverInfo" class="text-sm text-muted" style="padding:4px 0"></div>
+    </div>
+  </div>
+  <div class="sp-footer">
+    <button class="sp-btn ok"    onclick="boardSpSave()">✓ Salva</button>
+    <button class="sp-btn ghost" onclick="boardSpDuplicate()">⊕ Duplica</button>
+    <button class="sp-btn del"   onclick="boardSpDelete()">🗑 Svuota</button>
+  </div>
+</div>
+<div id="spBackdrop" onclick="closePanel()" style="position:fixed;inset:0;z-index:299;display:none"></div>
+
+<!-- ── Scheduler overlays ── -->
+<div class="overlay" id="picker" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:520px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="pkTitle">Seleziona turno</h2>
+    <p class="text-sm text-muted" id="pkSub" style="margin:-6px 0 12px"></p>
+    <div id="pkBody"></div>
+  </div>
+</div>
+<div class="overlay" id="loginBox" role="dialog" aria-modal="true">
+  <div class="obox">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Accesso team</h2>
+    <div style="display:grid;gap:10px;margin-top:12px">
+      <div><label class="lbl">Username (opzionale)</label><input id="luUser" class="inp" placeholder="Lascia vuoto per Admin"></div>
+      <div><label class="lbl">PIN</label><input id="luPin" class="inp" type="password" maxlength="12" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn" onclick="doLogin()">Accedi</button>
+      <div id="luMsg" class="text-sm" style="color:var(--bad)"></div>
+      <hr class="divider">
+      <div class="adminonly">
+        <label class="lbl">Nuovo PIN admin</label>
+        <div style="display:flex;gap:7px"><input id="pinNew" class="inp flex-1" type="text" placeholder="Nuovo PIN"><button class="btn ghost sm" onclick="changePin()">Salva</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="autoPick" role="dialog" aria-modal="true">
+  <div class="obox">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Genera turni automatici</h2>
+    <div style="display:grid;gap:10px;margin-top:12px">
+      <div><label class="lbl">Filiale</label><select id="autoFil" class="sel w-full"></select></div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="autoOverwrite"> Sovrascrivi celle già compilate</label>
+      <button class="btn" onclick="runAutoGen()">▶ Genera</button>
+      <div id="autoMsg" class="text-sm text-muted"></div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="importDasPick" role="dialog" aria-modal="true">
+  <div class="obox">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Importa DAS</h2>
+    <div style="display:grid;gap:10px;margin-top:12px">
+      <div>
+        <label class="lbl">Incolla lista (uno per riga: Cognome Nome Filiale Contratto Servizio)</label>
+        <textarea id="ewArea" class="inp" rows="8" placeholder="Rossi Mario DLO1 21 NEXT&#10;Bianchi Laura DLO7 PTV 18h SAME A"></textarea>
+      </div>
+      <button class="btn" onclick="importEw()">Importa</button>
+      <div id="ewMsg" class="text-sm text-muted"></div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="drvEdit" role="dialog" aria-modal="true">
+  <div class="obox">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="drvEditTitle">Modifica DAS</h2>
+    <div style="display:grid;gap:10px;margin-top:12px" id="drvEditBody"></div>
+  </div>
+</div>
+<!-- ── Scheduler: nuovo / modifica DAS (roster driver) ── -->
+<div class="overlay" id="drv" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:660px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="drvTitle">Nuovo DAS</h2>
+    <p class="text-sm text-muted" id="drvSub" style="margin:-6px 0 12px"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label class="lbl">Cognome *</label><input id="dCognome" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Nome</label><input id="dNome" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Filiale</label><select id="dFiliale" class="sel w-full"></select></div>
+      <div><label class="lbl">Servizio</label><select id="dService" class="sel w-full" onchange="onServiceChange()"></select></div>
+      <div><label class="lbl">Contratto</label><select id="dContratto" class="sel w-full" onchange="onContractChange()"></select></div>
+      <div><label class="lbl">Codice predefinito</label><select id="dDefault" class="sel w-full"></select></div>
+      <div><label class="lbl">Tipo contratto</label><select id="dCtrType" class="sel w-full" onchange="toggleExpiry()"><option value="indeterminato">Indeterminato</option><option value="determinato">Determinato</option></select></div>
+      <div id="expiryField" style="display:none"><label class="lbl">Scadenza</label><input id="dExpiry" class="inp" type="date"></div>
+      <div><label class="lbl">Transporter ID</label><input id="dTransporter" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Device</label><input id="dDevice" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Data assunzione</label><input id="dHire" class="inp" type="date"></div>
+      <div style="grid-column:1/-1"><label class="lbl">Giorni contrattuali</label><div class="daypick" id="dDays"></div></div>
+      <label style="grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="dAutofill" checked> Precompila i turni del mese in base ai giorni contrattuali</label>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" id="drvSave" onclick="saveDriver()">Salva</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scheduler: importa / esporta DAS ── -->
+<div class="overlay" id="impDas" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:620px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Importa DAS</h2>
+    <p class="text-sm text-muted" style="margin:-6px 0 12px">Un DAS per riga, campi separati da <b>;</b> o <b>,</b> :<br>
+      Cognome;Nome;Filiale;Servizio;Contratto;Tipo;Scadenza;Giorni;Codice;TransporterID;Device;DataAssunzione</p>
+    <div style="display:grid;gap:10px">
+      <input type="file" accept=".csv,.txt" onchange="loadCsvFile(event)" class="inp">
+      <textarea id="impText" class="inp" rows="9" placeholder="Rossi;Mario;DLO1;NEXT;21;indeterminato;;12345&#10;Bianchi;Laura;DLO7;SAME A;PTV 18h;determinato;2026-12-31;12"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="runImport()">⬆ Importa</button>
+        <button class="btn btn-ghost" onclick="exportDasCsv()">⬇ Esporta CSV attuali</button>
+        <button class="btn btn-ghost" onclick="closeAll()">Chiudi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="filPick" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:280px;text-align:center">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Seleziona filiale</h2>
+    <div id="filPickList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ── People: nuovo / modifica dipendente ── -->
+<div class="overlay" id="empEdit" role="dialog" aria-modal="true">
+  <div class="obox emp-obox" style="max-width:720px">
+    <button class="obox-close" onclick="closeEmpForm()">✕</button>
+    <h2 id="empEditTitle">Nuovo dipendente</h2>
+
+    <!-- Photo -->
+    <div class="emp-photo-row">
+      <div class="emp-avatar-lg" id="empf_photo_prev">👤</div>
+      <div class="emp-photo-ctrls">
+        <label class="lbl">Foto dipendente</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="btn btn-ghost sm" style="cursor:pointer">📷 Carica foto
+            <input type="file" id="empf_photo_file" accept="image/*" onchange="empPhotoPick(event)" hidden>
+          </label>
+          <button type="button" class="btn btn-ghost sm" id="empf_photo_rm" style="display:none" onclick="empPhotoClear()">Rimuovi</button>
+        </div>
+        <input type="hidden" id="empf_photo_url">
+      </div>
+    </div>
+
+    <!-- Section: Personal -->
+    <div class="emp-sect"><span class="emp-sect-t">👤 Dati personali</span></div>
+    <div class="emp-grid">
+      <div><label class="lbl">Cognome *</label><input id="empf_last_name" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Nome *</label><input id="empf_first_name" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Codice dipendente</label><input id="empf_employee_code" class="inp" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_code"></span></div>
+      <div><label class="lbl">Transporter ID</label><input id="empf_transporter_id" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Email</label><input id="empf_email" class="inp" type="email" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_email"></span></div>
+      <div><label class="lbl">Telefono</label><input id="empf_phone" class="inp" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_phone"></span></div>
+    </div>
+
+    <!-- Section: Work -->
+    <div class="emp-sect"><span class="emp-sect-t">🏢 Lavoro</span></div>
+    <div class="emp-grid">
+      <div><label class="lbl">Filiale</label><div id="empf_branch_ac"></div><select id="empf_branch_ids" hidden></select></div>
+      <div><label class="lbl">Servizio</label><div id="empf_service_ac"></div><select id="empf_service_type_ids" hidden></select></div>
+      <div><label class="lbl">Codice turno</label><div id="empf_shift_ac"></div><select id="empf_default_shift_codes" hidden></select></div>
+      <div><label class="lbl">Device</label><input id="empf_device" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Stato</label><select id="empf_status" class="sel w-full"><option value="active">Attivo</option><option value="inactive">Inattivo</option></select></div>
+      <div class="emp-days-cell"><label class="lbl">Giorni contrattuali</label><div class="chipsel" id="empf_work_days"></div></div>
+    </div>
+
+    <!-- Section: Contract -->
+    <div class="emp-sect"><span class="emp-sect-t">📃 Contratto</span></div>
+    <div class="emp-grid">
+      <div><label class="lbl">Tipo rapporto</label><select id="empf_rapporto" class="sel w-full" onchange="empOnRapporto()"><option value="det">Determinato</option><option value="ind">Indeterminato</option></select></div>
+      <div><label class="lbl">Contratto</label><select id="empf_contract_type_id" class="sel w-full"></select></div>
+      <div><label class="lbl">Data assunzione</label><input id="empf_hire_date" class="inp" type="date"></div>
+      <div><label class="lbl">Inizio contratto</label><input id="empf_contract_start_date" class="inp" type="date"></div>
+      <div id="empf_end_cell"><label class="lbl">Fine contratto</label><input id="empf_contract_end_date" class="inp" type="date"></div>
+    </div>
+
+    <div class="emp-form-actions">
+      <div id="empEditMsg" class="text-sm" style="color:var(--bad);flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeEmpForm()">Annulla</button>
+      <button class="btn btn-ghost" onclick="saveEmployee(true)">＋ Salva e nuovo</button>
+      <button class="btn btn-primary" onclick="saveEmployee()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Absence editor ── -->
+<div class="overlay" id="absModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:640px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="absModalTitle">Nuova assenza</h2>
+    <div class="abs-form">
+      <div class="abs-f-full">
+        <label class="lbl">Dipendente *</label>
+        <div id="absEmpAc"></div>
+        <input type="hidden" id="absEmp">
+      </div>
+      <div id="absEmpSummary" class="abs-f-full" style="display:none"></div>
+      <div class="abs-f-full">
+        <label class="lbl">Tipo *</label>
+        <input id="absType" class="inp" list="absTypeList" autocomplete="off" oninput="absRefreshInfo()" placeholder="Ferie, Malattia, Permesso…">
+        <datalist id="absTypeList">
+          <option>Ferie</option><option>Malattia</option><option>Infortunio</option>
+          <option>Permesso</option><option>Permesso Sindacale</option><option>Congedo</option>
+          <option>Aspettativa</option><option>Lutto</option>
+        </datalist>
+      </div>
+      <div><label class="lbl">Inizio *</label><input id="absStart" class="inp" type="date" onchange="absRefreshInfo()"></div>
+      <div><label class="lbl">Fine *</label><input id="absEnd" class="inp" type="date" onchange="absRefreshInfo()"></div>
+      <div id="absCalc" class="abs-f-full" style="display:none"></div>
+      <div class="abs-f-full"><label class="lbl">Note</label><textarea id="absNote" class="inp" rows="3" placeholder="Note opzionali…"></textarea></div>
+    </div>
+    <div class="abs-form-actions">
+      <div id="absModalMsg" class="text-sm" style="color:var(--bad);flex:1"></div>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" onclick="saveAbsence()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Document upload (drag & drop) ── -->
+<div class="overlay" id="docModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:540px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="docModalTitle">Carica documento</h2>
+    <div id="docDrop" class="doc-dropzone" onclick="docPickFile()"
+         ondrop="docDropHandler(event)" ondragover="docDragOver(event)" ondragleave="docDragLeave(event)"></div>
+    <input type="file" id="docFileInput" accept=".pdf,image/jpeg,image/png" style="display:none" onchange="docFileChosen(event)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <div style="grid-column:1/-1"><label class="lbl">Dipendente *</label><select id="docEmp" class="sel w-full"></select></div>
+      <div><label class="lbl">Categoria</label>
+        <select id="docCat" class="sel w-full">
+          <option value="identity">Carta d'identità</option>
+          <option value="driving_license">Patente di guida</option>
+          <option value="medical">Certificato medico</option>
+          <option value="contract">Contratto</option>
+          <option value="training">Formazione</option>
+          <option value="other">Altro</option>
+        </select>
+      </div>
+      <div><label class="lbl">Numero</label><input id="docNumber" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Emissione</label><input id="docIssue" class="inp" type="date"></div>
+      <div><label class="lbl">Scadenza</label><input id="docExpiry" class="inp" type="date"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveDocument()">💾 Salva</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <div id="docModalMsg" class="text-sm" style="color:var(--bad)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Shift template editor ── -->
+<div class="overlay" id="tplModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:620px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="tplModalTitle">Nuovo template</h2>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:12px">
+      <div><label class="lbl">Nome *</label><input id="tplName" class="inp" autocomplete="off"></div>
+      <div><label class="lbl">Pausa (min)</label><input id="tplBreak" class="inp" type="number" min="0"></div>
+      <div><label class="lbl">Servizio</label><select id="tplService" class="sel w-full"></select></div>
+      <div><label class="lbl">Filiale</label><select id="tplBranch" class="sel w-full"></select></div>
+      <div><label class="lbl">Colore</label><div class="tpl-swatches" id="tplColors"></div></div>
+    </div>
+    <label class="lbl" style="margin-top:14px;display:block">Griglia settimanale (Lun–Dom)</label>
+    <div class="tpl-weekgrid" id="tplWeek"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveTemplate()">💾 Salva</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <div id="tplModalMsg" class="text-sm" style="color:var(--bad)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Apply template ── -->
+<div class="overlay" id="tplApplyModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:440px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Applica template</h2>
+    <p class="text-sm text-muted" style="margin:8px 0 14px">
+      Applica il pattern settimanale di “<b id="tplApplyName">—</b>” a tutti i DAS del mese
+      <b id="tplApplyMonth">—</b> nel planner. I turni esistenti del mese verranno sovrascritti.
+    </p>
+    <label class="lbl">Filiale</label>
+    <select id="tplApplyBranch" class="sel w-full"></select>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" onclick="confirmApplyTemplate()">▶ Applica al mese</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Branch coverage detail ── -->
+<div class="overlay" id="branchDetailModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:640px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2 id="branchDetailTitle">Filiale</h2>
+    <div id="branchDetailBody" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ── AI Workforce Assistant (in-scheduler drawer) ── -->
+<div id="aiPanel">
+  <div class="ai-head">
+    <div><h3>🤖 Assistente pianificazione</h3><p class="text-xs text-muted">Analisi continua · suggerimenti operativi</p></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn ghost sm" onclick="refreshAssistant()" title="Aggiorna">↻</button>
+      <button class="btn ghost sm" onclick="closeAssistant()" title="Chiudi">✕</button>
+    </div>
+  </div>
+  <div class="ai-body" id="aiBody"></div>
+</div>
+
+<!-- ── Schedule version history ── -->
+<div class="overlay" id="verModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:560px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>🗂 Cronologia versioni</h2>
+    <p class="text-sm text-muted" style="margin:4px 0 12px">Salva istantanee del mese corrente e ripristinale quando serve.</p>
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px">
+      <div style="flex:1"><label class="lbl">Etichetta (opzionale)</label><input id="verLabel" class="inp" placeholder="es. Bozza settimana 2"></div>
+      <button class="btn btn-primary" onclick="saveCurrentVersion()">💾 Salva versione</button>
+    </div>
+    <div id="verList"></div>
+  </div>
+</div>
+
+<!-- ── Automatic shift generator ── -->
+<div class="overlay" id="genModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:660px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>⚙ Genera turni automaticamente</h2>
+    <p class="text-sm text-muted" style="margin:4px 0 0">Motore a regole · nessun calcolo su ore. Basato su forecast, qualifiche, disponibilità, giorni contrattuali ed equità.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:14px 0">
+      <div><label class="lbl">Filiale</label><select id="genBranch" class="sel"></select></div>
+      <div><label class="lbl">Ambito</label><select id="genScope" class="sel"><option value="month">Mese intero</option><option value="week">Settimana corrente</option></select></div>
+      <div><label class="lbl">Servizio</label><select id="genService" class="sel"><option value="">Tutti</option></select></div>
+      <div><label class="lbl">Celle</label><select id="genMode" class="sel"><option value="all">Rigenera tutto</option><option value="empty">Solo vuote</option></select></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;padding-bottom:7px"><input type="checkbox" id="genLock"> Blocca turni manuali</label>
+      <button class="btn btn-primary" onclick="runGenerator()">▶ Genera anteprima</button>
+    </div>
+    <div id="genResult"></div>
+    <div id="genActions" style="display:none;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" onclick="applyGenerator()">✔ Applica al planner</button>
+      <button class="btn btn-ghost" onclick="runGenerator()">↻ Rigenera</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Assign branches (filiali) to a user ── -->
+<div class="overlay" id="abModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:420px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Assegna filiali</h2>
+    <p class="text-sm text-muted" style="margin:6px 0 12px"><b id="abUserName">—</b> · <span id="abUserRole">—</span><br>
+      L'utente potrà gestire solo le filiali selezionate (turni e forecast).</p>
+    <div id="abBranches" class="ab-branch-list"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveAssignBranches()">💾 Salva</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <div id="abMsg" class="text-sm" style="color:var(--bad)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── New role ── -->
+<div class="overlay" id="roleModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:440px">
+    <button class="obox-close" onclick="closeAll()">✕</button>
+    <h2>Nuovo ruolo</h2>
+    <div style="display:grid;gap:10px;margin-top:12px">
+      <div><label class="lbl">Codice ruolo *</label><input id="roleNewCode" class="inp" placeholder="es. supervisor" autocomplete="off"></div>
+      <div><label class="lbl">Nome visualizzato</label><input id="roleNewLabel" class="inp" placeholder="es. Supervisore" autocomplete="off"></div>
+      <div><label class="lbl">Clona permessi da</label><select id="roleCloneFrom" class="sel w-full"></select></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveNewRole()">💾 Crea</button>
+      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <div id="roleModalMsg" class="text-sm" style="color:var(--bad)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Moduli JS — ordine di caricamento = ordine di dipendenza.
+     Script classici (non ES module): scope globale condiviso, così gli
+     onclick= inline e l'hoisting per-file continuano a funzionare.
+     Unica dipendenza parse-time: il bridge auth (js/auth.js) chiama
+     loadMonth/applyRole del motore scheduler → scheduler.js e i
+     componenti condivisi DEVONO precederlo. ═══ -->
+<!-- Enterprise core (must load before api.js: it emits/caches through these) -->
+<script src="js/core/bus.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/core/cache.js"></script>
+<script src="js/core/guard.js"></script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/state.js"></script>
+<script src="components/toast.js"></script>
+<script src="components/loader.js"></script>
+<script src="components/skeleton.js"></script>
+<script src="components/datatable.js"></script>
+<script src="components/autocomplete.js"></script>
+<script src="components/modal.js"></script>
+<script src="modules/scheduler/scheduler.js"></script>
+<script src="js/router.js"></script>
+<script src="modules/scheduler/board.js"></script>
+<script src="modules/scheduler/generator.js"></script>
+<script src="modules/scheduler/assistant.js"></script>
+<script src="modules/scheduler/versions.js"></script>
+<script src="modules/scheduler/workspace.js"></script>
+<script src="modules/scheduler/ops-center.js"></script>
+<script src="modules/scheduler/ops-bottom.js"></script>
+<script src="modules/scheduler/forecast-delta-footer.js"></script>
+<script src="modules/scheduler/scheduler-filters.js"></script>
+<script src="modules/scheduler/scheduler-colfilter.js"></script>
+<script src="modules/scheduler/scheduler-colfilter-ext.js"></script>
+<script src="modules/forecast/forecast-page.js"></script>
+<script src="js/auth.js"></script>
+<script src="modules/dashboard/dashboard.js"></script>
+<script src="modules/forecast/forecast.js"></script>
+<script src="components/sidebar.js"></script>
+<script src="components/header.js"></script>
+<script src="js/notifications.js"></script>
+<script src="components/searchbar.js"></script>
+<script src="modules/reports/reports.js"></script>
+<script src="modules/employees/employees.js"></script>
+<script src="modules/settings/settings.js"></script>
+<script src="modules/settings/config-ui.js"></script>
+<script src="modules/absences/absences.js"></script>
+<script src="modules/documents/documents.js"></script>
+<script src="modules/templates/templates.js"></script>
+<script src="modules/audit/audit.js"></script>
+<script src="modules/roles/roles.js"></script>
+<!-- Cross-module wiring: connects data events to the existing refreshers.
+     Loaded after all modules so their refresh functions exist. -->
+<script src="js/core/wire.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+/* ── KPI Card (dashboard) ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative; overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.kpi-card.ok    { border-top: 3px solid var(--ok); }
+.kpi-card.bad   { border-top: 3px solid var(--bad); }
+.kpi-card.warn  { border-top: 3px solid var(--warn); }
+.kpi-card.pri   { border-top: 3px solid var(--brand); }
+.kpi-card.purple{ border-top: 3px solid var(--purple); }
+.kpi-card.teal  { border-top: 3px solid var(--teal); }
+.kpi-icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; margin-bottom: 11px;
+}
+.kpi-card.ok   .kpi-icon { background: var(--ok-bg);     color: var(--ok); }
+.kpi-card.bad  .kpi-icon { background: var(--bad-bg);    color: var(--bad); }
+.kpi-card.warn .kpi-icon { background: var(--warn-bg);   color: var(--warn); }
+.kpi-card.pri  .kpi-icon { background: var(--brand-lt);  color: var(--brand); }
+.kpi-card.purple .kpi-icon { background: var(--purple-bg); color: var(--purple); }
+.kpi-card.teal   .kpi-icon { background: var(--teal-bg);   color: var(--teal); }
+.kpi-val   { font-size: 1.85rem; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.kpi-label { font-size: .68rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.kpi-subs  { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.kpi-sub   { display: flex; flex-direction: column; }
+.kpi-sub .sl { font-size: .62rem; color: var(--text-muted); }
+.kpi-sub .sv { font-size: .82rem; font-weight: 700; }
+.kpi-bar   { margin-top: 9px; height: 5px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.kpi-fill  { height: 100%; border-radius: 99px; transition: width .5s ease; }
+
+/* ── Charts ── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.chart-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.chart-title { font-size: .84rem; font-weight: 700; margin-bottom: 12px; }

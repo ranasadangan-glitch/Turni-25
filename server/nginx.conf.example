@@ -1,0 +1,71 @@
+# Reference Nginx config for TurniDSP on a self-managed VPS.
+#
+# This proxies Nginx (which terminates TLS) to the Node app running under PM2
+# on 127.0.0.1:3000 (adjust the port to match PORT in your .env).
+#
+# CRITICAL: `proxy_set_header X-Forwarded-Proto $scheme;` below is not
+# optional. Without it, the Node app has no way to know the original request
+# was HTTPS (it only ever sees the plain-HTTP connection from Nginx on
+# localhost). If you later set FORCE_HTTPS=true in the app's .env without
+# this header in place, every request will redirect-loop forever: Nginx
+# forwards the HTTPS request to Node as HTTP -> Node sees "not https" ->
+# Node 301s back to https:// -> Nginx receives it as a new HTTPS request ->
+# forwards it as HTTP again -> repeat indefinitely.
+#
+# Install: copy this file to /etc/nginx/sites-available/turnidsp,
+#   symlink it into sites-enabled, then `nginx -t && systemctl reload nginx`.
+
+# ── Step 1: plain HTTP, used for the ACME (Let's Encrypt) challenge and to
+#    redirect everything else to HTTPS once you have a certificate. Until you
+#    have a certificate, comment out the "return 301 https://..." line and
+#    proxy_pass directly here instead — do NOT set FORCE_HTTPS=true in the
+#    app until this block correctly serves HTTPS below.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app.tuodominio.it;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── Step 2: HTTPS, reverse-proxying to the Node app. ─────────────────────
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name app.tuodominio.it;
+
+    ssl_certificate     /etc/letsencrypt/live/app.tuodominio.it/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.tuodominio.it/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # Reasonable upload size for document/PDF attachments (see UPLOAD_DIR).
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        # Required so the app's `trust proxy` setting and the FORCE_HTTPS
+        # redirect logic see the real originating protocol/host/IP.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Keep-alive / websocket-friendly headers (harmless even though this
+        # app doesn't currently use websockets — cheap to include for the
+        # future rather than needing to revisit this file).
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 60s;
+        proxy_connect_timeout 10s;
+    }
+}

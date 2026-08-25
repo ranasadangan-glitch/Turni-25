@@ -1,0 +1,611 @@
+/* ════════════════════════════════════════════════════════════════════
+   TurniDSP Platform — Definitive Design System  v3
+   Single source of truth. No other CSS file should define tokens.
+   Used by: app.html (SPA), login.html, employees.html
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────
+   GOOGLE FONTS — Inter only
+   ───────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ─────────────────────────────────────────────
+   DESIGN TOKENS
+   Naming convention: semantic over descriptive.
+   --surface-*  background layers (0=page, 1=card, 2=elevated, 3=overlay)
+   --text-*     text hierarchy
+   --border-*   border hierarchy
+   --brand-*    primary action color (indigo)
+   --nav-*      sidebar-specific
+   --shift-*    schedule cell colors (business logic)
+   ───────────────────────────────────────────── */
+:root {
+  /* ── Brand (Indigo 600) ── */
+  --brand:        #4F46E5;
+  --brand-dk:     #4338CA;
+  --brand-lt:     #EEF2FF;
+  --brand-mid:    #C7D2FE;
+  --brand-ring:   rgba(79,70,229,.14);
+  --brand-glow:   rgba(79,70,229,.22);
+
+  /* ── Surfaces ── */
+  --surface-0:    #F4F5F7;   /* page background     */
+  --surface-1:    #FFFFFF;   /* card / panel        */
+  --surface-2:    #F0F1F5;   /* subtle inset        */
+  --surface-3:    rgba(0,0,0,.48); /* modal scrim   */
+
+  /* Aliases kept for legacy scheduler JS that references --bg, --card etc */
+  --bg:           var(--surface-0);
+  --bg2:          var(--surface-2);
+  --card:         var(--surface-1);
+  --card2:        var(--surface-2);
+
+  /* ── Text ── */
+  --text-primary:   #111827;
+  --text-secondary: #374151;
+  --text-muted:     #6B7280;
+  --text-faint:     #9CA3AF;
+
+  /* Aliases */
+  --ink:    var(--text-primary);
+  --ink2:   var(--text-secondary);
+  --muted:  var(--text-muted);
+
+  /* ── Borders ── */
+  --border:         #E5E7EB;
+  --border-strong:  #D1D5DB;
+  --border-stronger:#9CA3AF;
+
+  /* Aliases */
+  --line:   var(--border);
+  --line2:  var(--border-strong);
+
+  /* ── Semantic colors ── */
+  --ok:          #059669;  --ok-bg:     #ECFDF5;  --ok-border:   #6EE7B7;
+  --bad:         #DC2626;  --bad-bg:    #FEF2F2;  --bad-border:  #FCA5A5;
+  --warn:        #D97706;  --warn-bg:   #FFFBEB;  --warn-border: #FCD34D;
+  --info:        #0891B2;  --info-bg:   #ECFEFF;  --info-border: #67E8F9;
+  --purple:      #7C3AED;  --purple-bg: #F5F3FF;
+  --teal:        #0891B2;  --teal-bg:   #ECFEFF;
+
+  /* Legacy alias */
+  --pri:          var(--brand);
+  --pri-bg:       var(--brand-lt);
+  --pri-dark:     var(--brand-dk);
+  --pri-light:    var(--brand-mid);
+
+  /* ── Shift / schedule cell colors ── */
+  --shift-next:      #92400E;  --shift-next-bg:   #FEF3C7;  --shift-next-br:  #F59E0B;
+  --shift-samea:     #1E40AF;  --shift-samea-bg:  #DBEAFE;  --shift-samea-br: #3B82F6;
+  --shift-sameb:     #5B21B6;  --shift-sameb-bg:  #EDE9FE;  --shift-sameb-br: #8B5CF6;
+  --shift-mm:        #065F46;  --shift-mm-bg:     #CCFBF1;  --shift-mm-br:    #10B981;
+  --shift-abs:       #374151;  --shift-abs-bg:    #F3F4F6;  --shift-abs-br:   #9CA3AF;
+  --shift-mal:       #991B1B;  --shift-mal-bg:    #FFF1F2;  --shift-mal-br:   #F87171;
+  --shift-off:       #374151;  --shift-off-bg:    #F9FAFB;  --shift-off-br:   #D1D5DB;
+
+  /* Legacy scheduler names (referenced in JS codeCls logic) */
+  --next:   var(--shift-next);   --next-bg:   var(--shift-next-bg);   --next-br:   var(--shift-next-br);
+  --samea:  var(--shift-samea);  --samea-bg:  var(--shift-samea-bg);  --samea-br:  var(--shift-samea-br);
+  --sameb:  var(--shift-sameb);  --sameb-bg:  var(--shift-sameb-bg);  --sameb-br:  var(--shift-sameb-br);
+  --mm:     var(--shift-mm);     --mm-bg:     var(--shift-mm-bg);     --mm-br:     var(--shift-mm-br);
+  --abs:    var(--shift-abs);    --abs-bg:    var(--shift-abs-bg);    --abs-br:    var(--shift-abs-br);
+  --mal:    var(--shift-mal);    --mal-bg:    var(--shift-mal-bg);    --mal-br:    var(--shift-mal-br);
+  --off:    var(--shift-off);    --off-bg:    var(--shift-off-bg);    --off-br:    var(--shift-off-br);
+
+  /* ── Navigation sidebar ── */
+  --nav-surface:     #16213A;   /* deep navy — the platform's identity mark */
+  --nav-surface-dk:  #111827;
+  --nav-text:        rgba(255,255,255,.60);
+  --nav-text-active: #FFFFFF;
+  --nav-hover:       rgba(255,255,255,.08);
+  --nav-active:      var(--brand);
+  --nav-group:       rgba(255,255,255,.28);
+  --nav-divider:     rgba(255,255,255,.07);
+  --nav-w:           220px;
+
+  /* ── Layout ── */
+  --header-h:    56px;
+  --toolbar-h:   50px;
+  --bottom-bar-h:50px;
+  --r:           10px;
+  --r-sm:        7px;
+  --r-xs:        5px;
+  /* Legacy */
+  --radius:      var(--r);
+  --radius-sm:   var(--r-sm);
+  --sidebar-w:   var(--nav-w);
+
+  /* ── Shadows ── */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,.06);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow:     0 4px 14px rgba(0,0,0,.09), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:  0 16px 40px rgba(0,0,0,.14);
+
+  /* ── Motion ── */
+  --dur-fast:   .10s;
+  --dur:        .16s;
+  --dur-slow:   .28s;
+  --ease:       cubic-bezier(.4,0,.2,1);
+  --transition: var(--dur) var(--ease);
+  /* Legacy */
+  --transition-old: .18s cubic-bezier(.4,0,.2,1);
+
+  font-size: 14px;
+}
+
+/* ── Dark mode ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-0: #0F1117;
+    --surface-1: #1A2030;
+    --surface-2: #1E2638;
+    --bg:        var(--surface-0);
+    --bg2:       var(--surface-2);
+    --card:      var(--surface-1);
+    --card2:     var(--surface-2);
+    --text-primary:   #F9FAFB;
+    --text-secondary: #D1D5DB;
+    --text-muted:     #9CA3AF;
+    --ink:  var(--text-primary);
+    --ink2: var(--text-secondary);
+    --muted: var(--text-muted);
+    --border:         #2A3347;
+    --border-strong:  #374258;
+    --line:  var(--border);
+    --line2: var(--border-strong);
+    --brand-lt:   #1E3A5F;
+    --brand-mid:  #3730A3;
+    --ok-bg:    #052E1C;
+    --bad-bg:   #3B0D0D;
+    --warn-bg:  #3B2200;
+    --purple-bg:#2D1B69;
+    --info-bg:  #0B2D3A;
+    --teal-bg:  var(--info-bg);
+    --nav-surface:    #0F1117;
+    --nav-surface-dk: #08090D;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   RESET
+   ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+button { cursor: pointer; border: none; background: none; font: inherit; }
+input, select, textarea { font: inherit; }
+a { text-decoration: none; color: inherit; }
+img { display: block; max-width: 100%; }
+
+/* ═════════════════════════════════════════════
+   SHELL — the one layout used by every page
+   ═════════════════════════════════════════════ */
+
+/* Outer wrapper */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ─────────────────────────────────────────────
+   NAV — left sidebar (navy, fixed)
+   ───────────────────────────────────────────── */
+.app-nav {
+  width: var(--nav-w);
+  background: var(--nav-surface);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  transition: transform var(--dur) var(--ease);
+}
+.app-nav::-webkit-scrollbar { display: none; }
+
+/* Brand / logo */
+.nav-brand {
+  padding: 16px 14px 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--nav-divider);
+  flex-shrink: 0;
+}
+.nav-brand-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--brand);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.nav-brand-name {
+  font-size: .85rem; font-weight: 800;
+  color: #fff; line-height: 1.25;
+  letter-spacing: -.01em;
+}
+.nav-brand-sub {
+  font-size: .62rem;
+  color: var(--nav-group);
+  font-weight: 500;
+}
+
+/* User chip */
+.nav-user {
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 9px;
+  border-bottom: 1px solid var(--nav-divider);
+  flex-shrink: 0;
+}
+.nav-user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: var(--brand);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .68rem; font-weight: 800;
+  flex-shrink: 0;
+}
+.nav-user-name  { font-size: .78rem; font-weight: 600; color: #fff; line-height: 1.2; }
+.nav-user-role  { font-size: .62rem; color: var(--nav-group); }
+
+/* Section label */
+.nav-section-label {
+  padding: 14px 14px 4px;
+  font-size: .60rem; font-weight: 700;
+  color: var(--nav-group);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+/* Nav links */
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 1px 6px;
+  font-size: .80rem; font-weight: 500;
+  color: var(--nav-text);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  border: none;
+  width: calc(100% - 12px);
+  text-align: left;
+  white-space: nowrap;
+}
+.nav-item:hover   { background: var(--nav-hover); color: #fff; }
+.nav-item.active  { background: var(--brand); color: #fff; font-weight: 600; }
+.nav-item-icon    { font-size: .88rem; width: 16px; text-align: center; flex-shrink: 0; }
+
+/* ── Collapsible nav groups ─────────────────────────────────────── */
+.nav-top { margin-top: 4px; }
+.nav-group { margin-top: 4px; }
+.nav-group-h {
+  display: flex; align-items: center; gap: 9px;
+  width: calc(100% - 12px); margin: 2px 6px;
+  padding: 8px 12px; border: none; background: transparent; cursor: pointer;
+  color: var(--nav-text); opacity: .78;
+  font-size: .74rem; font-weight: 700; letter-spacing: .01em; border-radius: 8px;
+  transition: background var(--transition), color var(--transition), opacity var(--transition);
+}
+.nav-group-h:hover { background: var(--nav-hover); color: #fff; opacity: 1; }
+.nav-group-lbl { flex: 1; text-align: left; white-space: nowrap; }
+.nav-chev { font-size: .62rem; color: var(--nav-group); transition: transform var(--transition); }
+.nav-group.collapsed .nav-chev { transform: rotate(-90deg); }
+.nav-group.collapsed .nav-group-body { display: none; }
+.nav-group.has-active .nav-group-h { opacity: 1; }
+.nav-group.has-active .nav-group-h .nav-item-icon { filter: none; }
+.nav-group.has-active > .nav-group-h .nav-chev { color: var(--brand); }
+.nav-group-body { display: flex; flex-direction: column; }
+/* child items are indented under the group icon (they carry no icon of their own) */
+.nav-group-body .nav-item { padding-left: 34px; font-weight: 500; }
+.nav-group-body .nav-item.active { font-weight: 600; }
+/* An adminonly GROUP container must stay a vertical block for admins — the app's
+   `body.is-admin .adminonly{display:flex}` would otherwise lay header+body in a row. */
+body.is-admin .nav-group.adminonly { display: block !important; }
+.nav-item-badge   {
+  margin-left: auto;
+  background: var(--bad); color: #fff;
+  border-radius: 20px;
+  font-size: .58rem; font-weight: 700;
+  padding: 1px 6px; min-width: 17px;
+  text-align: center;
+}
+/* RBAC visibility */
+.adminonly  { display: none !important; }
+.teamonly   { display: none !important; }
+body.is-admin .adminonly  { display: flex !important; }
+body.is-admin .adminonly.block  { display: block !important; }
+body.is-admin .adminonly.inline-flex { display: inline-flex !important; }
+body.is-team  .teamonly   { display: inline-flex !important; }
+/* An admin-only scheduler view (Config/Analisi/Registro/Dati) is still a
+   .sch-view: the RBAC rule above must NOT force it visible when it isn't the
+   active view, or every admin view stacks at once and the view-switcher
+   (setView + .on) stops working. This higher-specificity rule restores the
+   hide-unless-active behaviour for admins while keeping role gating intact. */
+body.is-admin .sch-view.adminonly:not(.on) { display: none !important; }
+body.is-admin .sch-view.adminonly.on { display: flex !important; }
+/* Same collision for a top-level admin-only page (sec-settings): it's a
+   .spa-section gated by .active, so the RBAC rule must not force it visible
+   when another section is active — otherwise Settings stacks under every page
+   for admins. Respect .active while keeping role gating. */
+body.is-admin .spa-section.adminonly:not(.active) { display: none !important; }
+body.is-admin .spa-section.adminonly.active { display: flex !important; }
+
+/* Sidebar footer */
+.nav-footer {
+  margin-top: auto;
+  padding: 8px 6px 12px;
+  border-top: 1px solid var(--nav-divider);
+}
+.nav-sync-chip {
+  margin: 0 8px 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: .62rem; font-weight: 600;
+  text-align: center;
+  background: rgba(255,255,255,.06);
+  color: var(--nav-group);
+}
+.nav-logout {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  width: 100%;
+  font-size: .78rem;
+  color: rgba(255,255,255,.38);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: none; border: none;
+}
+.nav-logout:hover { background: rgba(220,38,38,.15); color: #FCA5A5; }
+
+/* ─────────────────────────────────────────────
+   CONTENT — main area to the right of nav
+   ───────────────────────────────────────────── */
+.app-content {
+  margin-left: var(--nav-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────
+   HEADER — sticky top bar
+   ───────────────────────────────────────────── */
+.app-header {
+  height: var(--header-h);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+.app-header-title { font-size: .98rem; font-weight: 700; letter-spacing: -.01em; }
+.app-header-sub   { font-size: .72rem; color: var(--text-muted); margin-left: 4px; }
+.app-header-spacer { flex: 1; }
+
+/* Header search */
+.header-search { position: relative; }
+.header-search-input {
+  padding: 7px 12px 7px 30px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: .80rem;
+  min-width: 200px;
+  outline: none;
+  transition: border-color var(--transition), background var(--transition);
+}
+.header-search-input:focus {
+  border-color: var(--brand);
+  background: var(--surface-1);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+}
+.header-search::before {
+  content: '⌕';
+  position: absolute; left: 9px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: .95rem; pointer-events: none;
+}
+.header-search-dropdown {
+  display: none;
+  position: absolute; top: 42px; left: 0; right: 0;
+  min-width: 300px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 400;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.search-result-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: .80rem;
+  cursor: pointer;
+  transition: background var(--transition);
+  color: var(--text-primary);
+}
+.search-result-item:last-child { border-bottom: 0; }
+.search-result-item:hover { background: var(--surface-2); }
+.search-result-icon { font-size: 1rem; flex-shrink: 0; }
+.search-result-title { font-weight: 600; }
+.search-result-sub   { font-size: .70rem; color: var(--text-muted); }
+.search-result-type  {
+  margin-left: auto;
+  background: var(--surface-2); color: var(--text-muted);
+  border-radius: 6px; font-size: .62rem;
+  padding: 1px 6px; flex-shrink: 0;
+}
+
+/* Notification bell */
+.notif-wrap     { position: relative; }
+.notif-btn      {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .95rem; cursor: pointer;
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+.notif-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+.notif-badge    {
+  position: absolute; top: -2px; right: -2px;
+  background: var(--bad); color: #fff;
+  border-radius: 10px;
+  font-size: .58rem; font-weight: 700;
+  padding: 1px 5px; min-width: 16px;
+  text-align: center;
+  display: none;
+}
+.notif-panel {
+  display: none;
+  position: absolute; top: 42px; right: 0;
+  width: 330px; max-height: 460px; overflow-y: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 400;
+}
+.notif-panel-head {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0;
+  background: var(--surface-1);
+}
+.notif-panel-head span { font-size: .82rem; font-weight: 700; }
+.notif-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.notif-item:hover { background: var(--surface-2); }
+.notif-item:last-child { border-bottom: 0; }
+.notif-item.unread { background: var(--brand-lt); }
+.notif-item-title { font-size: .80rem; font-weight: 600; margin-bottom: 2px; }
+.notif-item-body  { font-size: .72rem; color: var(--text-muted); margin-bottom: 3px; }
+.notif-item-ts    { font-size: .65rem; color: var(--text-muted); }
+/* ph-notif-item is what js/notifications.js actually renders (was previously
+   unstyled: the JS uses "ph-notif-item" but this file only defined
+   ".notif-item", so notification panel entries had zero styling). Alias it
+   to the same rules rather than duplicating them. */
+.ph-notif-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--transition); }
+.ph-notif-item:hover { background: var(--surface-2); }
+.ph-notif-item:last-child { border-bottom: 0; }
+.ph-notif-item.unread { background: var(--brand-lt); }
+
+/* Header pill / button */
+.header-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: .78rem; font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.header-btn:hover   { border-color: var(--brand); color: var(--brand); background: var(--brand-lt); }
+.header-btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+.header-btn.primary:hover { background: var(--brand-dk); }
+.header-btn.sm { padding: 4px 10px; font-size: .72rem; }
+
+/* Save state pill */
+.save-pill {
+  font-size: .70rem; font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+.save-pill.saving  { background: var(--brand-lt);  color: var(--brand); }
+.save-pill.saved   { background: var(--ok-bg);     color: var(--ok); }
+.save-pill.error   { background: var(--bad-bg);    color: var(--bad); }
+
+/* Role badge */
+.role-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: .70rem; font-weight: 700;
+  background: var(--brand-lt);
+  color: var(--brand);
+}
+.role-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Branch chip */
+.branch-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: .78rem; font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.branch-chip:hover { border-color: var(--brand); color: var(--brand); }
+
+/* ─────────────────────────────────────────────
+   SPA SECTIONS (layout manager)
+   ───────────────────────────────────────────── */
+.app-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Each section: hidden by default, flex when active */
+.spa-section { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.spa-section.active {
+  display: flex;
+  animation: spaFadeIn var(--dur-slow) var(--ease) both;
+}
+@keyframes spaFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollable pages (dashboard, employees, reports, settings) */
+.page-scroll { overflow-y: auto; }
+.page-pad    { padding: 22px 24px; max-width: 1440px; }
+
+/* Page headings */
+.page-head {
+  display: flex; align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap; gap: 12px;
+}
+.page-title { font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }
+.page-sub   { font-size: .75rem; color: var(--text-muted); margin-top: 2px; }
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title { font-size: .88rem; font-weight: 700; }
