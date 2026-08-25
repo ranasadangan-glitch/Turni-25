@@ -71,6 +71,11 @@ async function ensureAdmin() {
     // schedule_entries in the legacy per-day (work_date) shape so legacy
     // readers can migrate onto the real source of truth. Non-destructive.
     await runFile(path.join(root, 'schema', '18_schedule_view.sql'));
+    // 19 — additive compatibility view (v_forecast_days): presents
+    // schedule_forecasts in the legacy per-day (forecast_date) shape so
+    // date-total forecast readers can migrate onto the real source of truth.
+    // Non-destructive; service_key preserved (not mapped to service_type_id).
+    await runFile(path.join(root, 'schema', '19_forecast_view.sql'));
     // Seed the default scheduling rules once (skipped if any row exists).
     {
       const rc = await pool.query('SELECT count(*)::int AS c FROM scheduling_rules');
