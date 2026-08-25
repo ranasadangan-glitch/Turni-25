@@ -52,7 +52,7 @@ router.get('/schedule/weekly', async (req, res) => {
   const params = [from, days[6]]; const bc = branchClause(req.scope, params, 'e.branch_id');
   let q = `SELECT e.id, e.last_name, e.first_name, b.code branch_code, s.work_date, s.shift_code
              FROM employees e JOIN branches b ON b.id=e.branch_id
-             LEFT JOIN schedules s ON s.employee_id=e.id AND s.work_date BETWEEN $1 AND $2
+             LEFT JOIN v_schedule_days s ON s.employee_id=e.id AND s.work_date BETWEEN $1 AND $2
             WHERE e.status='active' ${bc}`;
   if (req.query.branch) { params.push(req.query.branch); q += ` AND b.code=$${params.length}`; }
   q += ' ORDER BY e.last_name, e.first_name, s.work_date';
@@ -78,7 +78,7 @@ router.get('/schedule/monthly', async (req, res) => {
   const params = [from, to]; const bc = branchClause(req.scope, params, 'e.branch_id');
   let q = `SELECT e.id, e.last_name, e.first_name, b.code branch_code, s.work_date, s.shift_code
              FROM employees e JOIN branches b ON b.id=e.branch_id
-             LEFT JOIN schedules s ON s.employee_id=e.id AND s.work_date BETWEEN $1 AND $2
+             LEFT JOIN v_schedule_days s ON s.employee_id=e.id AND s.work_date BETWEEN $1 AND $2
             WHERE e.status='active' ${bc}`;
   if (req.query.branch) { params.push(req.query.branch); q += ` AND b.code=$${params.length}`; }
   q += ' ORDER BY e.last_name, e.first_name';
