@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
   if (!from || !to) return res.status(400).json({ error: 'from/to richiesti' });
   const params = [from, to];
   let sql = `SELECT s.employee_id, s.work_date, s.shift_code
-               FROM schedules s JOIN employees e ON e.id=s.employee_id
+               FROM v_schedule_days s JOIN employees e ON e.id=s.employee_id
               WHERE s.work_date BETWEEN $1 AND $2`;
   if (!req.scope.admin) {
     if (!req.scope.branches.length) return res.json([]);

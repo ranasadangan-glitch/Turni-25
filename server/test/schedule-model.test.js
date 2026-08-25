@@ -90,20 +90,19 @@ test('v_schedule_days maps schedule_month + day_of_month to a real work_date', a
   assert.equal(rows[0].d, '2099-01-01', 'day_of_month=1 of 2099-01 resolves to 2099-01-01');
 });
 
-test('employee-linked shifts are visible through the view (not through the schedules table)', async (t) => {
+test('employee-linked shifts are visible through the view; legacy schedules table is gone', async (t) => {
   if (!dbReachable) return t.skip('no database');
   const viaView = await pool.query(
     `SELECT count(*)::int AS n FROM v_schedule_days WHERE employee_id=$1`, [empId]);
   assert.equal(viaView.rows[0].n, 2, 'both employee cells (work + off) are exposed by the view');
 
-  // Regression guard: the legacy `schedules` table is NOT the source of truth.
-  // The scheduler/engine wrote these cells into schedule_entries, so a reader
-  // that only queries `schedules` (reports/pdf/forecast/employee-profile) sees
-  // nothing. This is exactly the bug the migration is meant to fix.
-  const viaLegacy = await pool.query(
-    `SELECT count(*)::int AS n FROM schedules WHERE employee_id=$1`, [empId]);
-  assert.equal(viaLegacy.rows[0].n, 0,
-    'real shift data lives in schedule_entries, not in the legacy schedules table');
+  // Phase 4 regression guard: the legacy `schedules` table has been dropped
+  // (migration 20). schedule_entries is the sole source of truth; every reader
+  // now goes through v_schedule_days above.
+  const legacy = await pool.query(
+    `SELECT count(*)::int AS n FROM information_schema.tables
+      WHERE table_schema='public' AND table_name='schedules'`);
+  assert.equal(legacy.rows[0].n, 0, 'the legacy schedules table no longer exists');
 });
 
 test('unified planned count (reports.js semantic) sees employee work days via the view', async (t) => {

@@ -76,6 +76,9 @@ async function ensureAdmin() {
     // date-total forecast readers can migrate onto the real source of truth.
     // Non-destructive; service_key preserved (not mapped to service_type_id).
     await runFile(path.join(root, 'schema', '19_forecast_view.sql'));
+    // 20 — drop the legacy `schedules` table (phase 4). Guarded: migrates any
+    // lingering rows into schedule_entries before dropping. Idempotent.
+    await runFile(path.join(root, 'schema', '20_drop_schedules.sql'));
     // Seed the default scheduling rules once (skipped if any row exists).
     {
       const rc = await pool.query('SELECT count(*)::int AS c FROM scheduling_rules');

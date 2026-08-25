@@ -142,19 +142,11 @@ CREATE INDEX IF NOT EXISTS idx_emp_status ON employees(status);
 
 -- ---------- scheduling ----------
 
--- one row per employee per day (the planned shift)
-CREATE TABLE IF NOT EXISTS schedules (
-  id            BIGSERIAL PRIMARY KEY,
-  employee_id   INT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  work_date     DATE NOT NULL,
-  shift_code    TEXT NOT NULL,                   -- references shift_codes.code
-  note          TEXT,
-  updated_by    TEXT,
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (employee_id, work_date)
-);
-CREATE INDEX IF NOT EXISTS idx_sched_date ON schedules(work_date);
-CREATE INDEX IF NOT EXISTS idx_sched_emp  ON schedules(employee_id);
+-- NOTE: the legacy per-day `schedules` table was removed in migration
+-- 20_drop_schedules.sql (Critical #2, phase 4). schedule_entries
+-- (06_scheduler.sql) is the single source of truth for shift cells; the
+-- v_schedule_days view (18_schedule_view.sql) exposes it in the old per-day
+-- shape for readers.
 
 -- reusable shift templates (e.g. "Mon-Fri NEXT")
 CREATE TABLE IF NOT EXISTS shift_templates (

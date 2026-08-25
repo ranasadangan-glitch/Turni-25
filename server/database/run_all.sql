@@ -142,19 +142,9 @@ CREATE INDEX IF NOT EXISTS idx_emp_status ON employees(status);
 
 -- ---------- scheduling ----------
 
--- one row per employee per day (the planned shift)
-CREATE TABLE IF NOT EXISTS schedules (
-  id            BIGSERIAL PRIMARY KEY,
-  employee_id   INT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  work_date     DATE NOT NULL,
-  shift_code    TEXT NOT NULL,                   -- references shift_codes.code
-  note          TEXT,
-  updated_by    TEXT,
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (employee_id, work_date)
-);
-CREATE INDEX IF NOT EXISTS idx_sched_date ON schedules(work_date);
-CREATE INDEX IF NOT EXISTS idx_sched_emp  ON schedules(employee_id);
+-- NOTE: the legacy per-day `schedules` table was removed in phase 4.
+-- schedule_entries is the single source of truth; v_schedule_days exposes it
+-- in the old per-day shape.
 
 -- reusable shift templates (e.g. "Mon-Fri NEXT")
 CREATE TABLE IF NOT EXISTS shift_templates (
@@ -299,9 +289,7 @@ CREATE INDEX IF NOT EXISTS idx_emp_name_trgm
 CREATE INDEX IF NOT EXISTS idx_emp_branch_status ON employees(branch_id, status);
 CREATE INDEX IF NOT EXISTS idx_emp_team_status   ON employees(team_id, status);
 
--- Schedules: composite for range scans by branch via employee join is covered by
--- existing idx_sched_date + idx_sched_emp; add code filter helper
-CREATE INDEX IF NOT EXISTS idx_sched_code ON schedules(shift_code);
+-- (idx_sched_code on the legacy schedules table removed in phase 4.)
 
 -- Forecast lookups by branch+service over a date range
 CREATE INDEX IF NOT EXISTS idx_fc_branch_service ON forecasts(branch_id, service_type_id, forecast_date);
@@ -316,7 +304,6 @@ CREATE INDEX IF NOT EXISTS idx_disc_open ON disciplinary_actions(archived, actio
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(username);
 
 ANALYZE employees;
-ANALYZE schedules;
 ANALYZE forecasts;
 -- ============================================================
 -- Seed data for TurniDSP Platform
