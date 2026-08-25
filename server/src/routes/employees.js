@@ -100,9 +100,10 @@ router.get('/:id', async (req, res) => {
               (SELECT json_agg(disc ORDER BY disc.action_date DESC)
                  FROM disciplinary_actions disc WHERE disc.employee_id = p.id AND disc.archived = FALSE) AS disciplinary,
               (SELECT json_agg(
-                  json_build_object('work_date', s.work_date, 'shift_code', s.shift_code, 'note', s.note)
+                  json_build_object('work_date', s.work_date, 'shift_code', s.shift_code, 'note', NULL)
                   ORDER BY s.work_date DESC
-               ) FROM (SELECT * FROM schedules WHERE employee_id = p.id ORDER BY work_date DESC LIMIT 60) s
+               ) FROM (SELECT work_date, shift_code FROM v_schedule_days
+                        WHERE employee_id = p.id ORDER BY work_date DESC LIMIT 60) s
               ) AS recent_schedules
          FROM v_employee_profile p
          JOIN employees e ON e.id = p.id
