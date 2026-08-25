@@ -6,8 +6,13 @@ const helmet = require('helmet');
 
 const app = express();
 
-// trust proxy so req.ip and req.protocol are correct behind Render/Railway/nginx
-app.set('trust proxy', true);
+// Trust exactly ONE reverse-proxy hop. Every deploy target in this project is
+// single-hop (Render/Railway edge, or Nginx on a VPS). `true` trusted every
+// upstream, which let a client spoof X-Forwarded-For and poison req.ip — the
+// value the login rate limiter and account lockout key on. `1` takes the
+// client IP from the entry the trusted proxy appended, which the client
+// cannot forge.
+app.set('trust proxy', 1);
 
 // ---- (1) HTTPS only: redirect HTTP -> HTTPS, but ONLY when explicitly enabled ----
 // This used to trigger on NODE_ENV=production alone. That is correct on Render/
