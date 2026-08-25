@@ -21,7 +21,7 @@ router.get('/summary', async (req, res) => {
     `SELECT count(*) FILTER (WHERE sc.is_work) AS worked_days,
             count(*) FILTER (WHERE sc.is_absence) AS absence_days,
             count(*) FILTER (WHERE sc.is_off) AS off_days
-       FROM schedules s
+       FROM v_schedule_days s
        JOIN employees e ON e.id=s.employee_id
        JOIN shift_codes sc ON sc.code=s.shift_code
       WHERE s.work_date BETWEEN $1 AND $2 ${bc}`, p1);
@@ -54,8 +54,8 @@ router.get('/forecast-accuracy', async (req, res) => {
   const { from, to } = req.query;
   const { rows } = await pool.query(
     `WITH fc AS (SELECT forecast_date d, sum(qty) f FROM forecasts WHERE forecast_date BETWEEN $1 AND $2 GROUP BY 1),
-          pl AS (SELECT s.work_date d, count(*) p FROM schedules s JOIN shift_codes sc ON sc.code=s.shift_code
-                  WHERE sc.is_work AND s.work_date BETWEEN $1 AND $2 GROUP BY 1)
+          pl AS (SELECT s.work_date d, count(*) p FROM v_schedule_days s JOIN shift_codes sc ON sc.code=s.shift_code
+                  WHERE sc.is_work AND s.employee_id IS NOT NULL AND s.work_date BETWEEN $1 AND $2 GROUP BY 1)
      SELECT COALESCE(fc.d,pl.d) d, COALESCE(fc.f,0) forecast, COALESCE(pl.p,0) planned,
             COALESCE(pl.p,0)-COALESCE(fc.f,0) delta
        FROM fc FULL OUTER JOIN pl ON fc.d=pl.d ORDER BY d`, [from, to]);
@@ -78,7 +78,7 @@ router.get('/dsp-dashboard', async (req, res) => {
 
   const planned = await pool.query(
     `SELECT st.name service, count(*)::int planned
-       FROM schedules s
+       FROM v_schedule_days s
        JOIN employees e ON e.id=s.employee_id
        JOIN branches b ON b.id=e.branch_id
        JOIN service_types st ON st.default_shift_code=s.shift_code
@@ -113,7 +113,7 @@ router.get('/dsp-dashboard', async (req, res) => {
   const absent = await pool.query(
     `SELECT count(DISTINCT e.id)::int n
        FROM employees e
-       LEFT JOIN schedules s ON s.employee_id=e.id AND s.work_date=$1
+       LEFT JOIN v_schedule_days s ON s.employee_id=e.id AND s.work_date=$1
        LEFT JOIN shift_codes sc ON sc.code=s.shift_code
        LEFT JOIN absences a ON a.employee_id=e.id AND $1 BETWEEN a.start_date AND a.end_date
       WHERE e.status='active' AND (sc.is_absence=TRUE OR a.id IS NOT NULL) ${bcab}`, pab);
