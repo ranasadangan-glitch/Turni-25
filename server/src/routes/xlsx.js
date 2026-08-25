@@ -192,7 +192,7 @@ router.get('/export/schedule', async (req, res) => {
   const params = [from, to]; const bc = branchClause(req.scope, params, 'e.branch_id');
   const { rows } = await pool.query(
     `SELECT e.employee_code, e.last_name, e.first_name, b.code branch_code, s.work_date, s.shift_code
-       FROM schedules s JOIN employees e ON e.id=s.employee_id JOIN branches b ON b.id=e.branch_id
+       FROM v_schedule_days s JOIN employees e ON e.id=s.employee_id JOIN branches b ON b.id=e.branch_id
       WHERE s.work_date BETWEEN $1 AND $2 ${bc} ORDER BY e.last_name, s.work_date`, params);
   sendWorkbook(res, sheetToWb(rows, 'Schedule'), 'schedule.xlsx');
 });
