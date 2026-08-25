@@ -53,7 +53,7 @@ router.get('/summary', async (req, res) => {
 router.get('/forecast-accuracy', async (req, res) => {
   const { from, to } = req.query;
   const { rows } = await pool.query(
-    `WITH fc AS (SELECT forecast_date d, sum(qty) f FROM forecasts WHERE forecast_date BETWEEN $1 AND $2 GROUP BY 1),
+    `WITH fc AS (SELECT forecast_date d, sum(qty) f FROM v_forecast_days WHERE forecast_date BETWEEN $1 AND $2 GROUP BY 1),
           pl AS (SELECT s.work_date d, count(*) p FROM v_schedule_days s JOIN shift_codes sc ON sc.code=s.shift_code
                   WHERE sc.is_work AND s.employee_id IS NOT NULL AND s.work_date BETWEEN $1 AND $2 GROUP BY 1)
      SELECT COALESCE(fc.d,pl.d) d, COALESCE(fc.f,0) forecast, COALESCE(pl.p,0) planned,
