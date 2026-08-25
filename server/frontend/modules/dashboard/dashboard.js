@@ -136,7 +136,7 @@ function renderTodayEmployees(d) {
     else if (r.is_absence) stato = '<span class="badge b-bad">Assente</span>';
     else if (r.is_off)     stato = '<span class="badge b-warn">Riposo</span>';
     const name = `${r.cognome || ''} ${r.nome || ''}`.trim() || '—';
-    return `<tr class="dsp-row" style="cursor:pointer" onclick="focusEmployeeInBoard('${esc(name)}')" title="Trova nel planner">
+    return `<tr class="dsp-row" style="cursor:pointer" data-name="${esc(name)}" onclick="focusEmployeeInBoard(this.dataset.name)" title="Trova nel planner">
       <td><b>${esc(name)}</b></td>
       <td>${esc(r.branch_code || '—')}</td>
       <td>${r.shift_code ? esc(r.shift_code) : '<span class="text-muted">—</span>'}</td>
@@ -341,7 +341,7 @@ async function loadAlerts() {
     const rows = await TurniApi.expiryAlerts(60);
     const tbody = $d('alertsTbl').querySelector('tbody');
     if(!rows.length) { tbody.innerHTML='<tr><td colspan="5" class="text-muted" style="padding:12px;text-align:center">Nessuna scadenza nei prossimi 60 giorni</td></tr>'; return; }
-    tbody.innerHTML = rows.slice(0,25).map(r=>`<tr class="dsp-row" style="cursor:pointer" onclick="focusEmployeeInBoard('${esc(r.full_name||'')}')" title="Trova questo dipendente nel planner">
+    tbody.innerHTML = rows.slice(0,25).map(r=>`<tr class="dsp-row" style="cursor:pointer" data-name="${esc(r.full_name||'')}" onclick="focusEmployeeInBoard(this.dataset.name)" title="Trova questo dipendente nel planner">
       <td><b>${esc(r.full_name||'—')}</b></td>
       <td>${esc(r.alert_type||'—')}</td>
       <td>${fmt(r.expiry_date)}</td>
