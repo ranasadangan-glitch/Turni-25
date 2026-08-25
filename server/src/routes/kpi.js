@@ -105,7 +105,7 @@ unified_entries AS (
     sc.is_absence,
     sc.is_off,
     sc.category
-  FROM schedules s
+  FROM v_schedule_days s
   JOIN employees e    ON e.id = s.employee_id
   LEFT JOIN branches b ON b.id = e.branch_id
   LEFT JOIN shift_codes sc ON sc.code = s.shift_code
@@ -177,7 +177,7 @@ fc_sc AS (
 ),
 pl_hr AS (
   SELECT s.work_date::date AS d, count(*)::int AS cnt
-  FROM schedules s JOIN employees e ON e.id = s.employee_id
+  FROM v_schedule_days s JOIN employees e ON e.id = s.employee_id
   LEFT JOIN branches b ON b.id = e.branch_id
   JOIN shift_codes sc ON sc.code = s.shift_code
   WHERE sc.is_work AND s.work_date BETWEEN ($1::date - 29) AND $1::date
@@ -301,7 +301,7 @@ router.get('/', async (req, res) => {
         SELECT s.work_date::date AS d,
                count(*) FILTER (WHERE sc.is_work)::int    AS present,
                count(*) FILTER (WHERE sc.is_absence)::int AS absent
-          FROM schedules s
+          FROM v_schedule_days s
           JOIN employees e ON e.id = s.employee_id
           LEFT JOIN branches b ON b.id = e.branch_id
           JOIN shift_codes sc ON sc.code = s.shift_code
@@ -430,7 +430,7 @@ router.get('/', async (req, res) => {
                count(*) FILTER (WHERE upper(code) IN ('M','I'))::int AS medical
         FROM (
           SELECT b.code AS branch_code, s.shift_code AS code, sc.is_work, sc.is_absence, sc.is_off
-            FROM schedules s JOIN employees e ON e.id = s.employee_id
+            FROM v_schedule_days s JOIN employees e ON e.id = s.employee_id
             LEFT JOIN branches b ON b.id = e.branch_id
             JOIN shift_codes sc ON sc.code = s.shift_code
            WHERE s.work_date = $1::date ${brC ? `AND b.code = ${brC}` : ''}
@@ -549,7 +549,7 @@ router.get('/', async (req, res) => {
         SELECT s.work_date::date AS d,
                count(*) FILTER (WHERE sc.is_work)::int    AS planned,
                count(*) FILTER (WHERE sc.is_absence)::int AS absent
-          FROM schedules s JOIN employees e ON e.id = s.employee_id
+          FROM v_schedule_days s JOIN employees e ON e.id = s.employee_id
           LEFT JOIN branches b ON b.id = e.branch_id
           JOIN shift_codes sc ON sc.code = s.shift_code
          WHERE s.work_date BETWEEN $1::date AND $1::date + 6
