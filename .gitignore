@@ -7,3 +7,6 @@ server/uploads/documents/*
 !server/uploads/**/.gitkeep
 npm-debug.log*
 .DS_Store
+
+# Local Claude Code settings (may contain machine-specific paths / credentials)
+.claude/settings.local.json
