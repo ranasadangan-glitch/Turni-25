@@ -362,4 +362,43 @@
       "<div class='card card-pad' style='margin-top:12px'><div class='section-title text-sm mb-2'>Assegnazioni e motivazioni <span class='text-xs text-muted'>(" + preview.assignments.length + " totali · " + r.drivers + " DAS)</span></div>" +
       sample + (preview.assignments.length > 12 ? "<div class='text-xs text-muted' style='padding-top:8px'>… e altre " + (preview.assignments.length - 12) + " assegnazioni</div>" : '') + "</div>";
   }
+
+  // ── Inline validation of a MANUAL assignment (Scheduler UX #2) ────────────
+  // Runs the enabled scheduling_rules predicates against a driver's CURRENT code
+  // on day d and returns the ones that FAIL, as {rule, reason}. Reuses the exact
+  // SKIP_EVAL predicates + helpers used by generation (single source of truth) —
+  // it does NOT change the engine or the DB. Synchronous: uses the already-loaded
+  // rules cache; when rules aren't loaded yet it falls back to the built-in
+  // defaults so warnings still work. Only WORKING shifts are validated
+  // (rest/absence codes are valid as-is; an absence day keeps its absence code).
+  window.cellWarnings = function (dr, d) {
+    if (!dr) return [];
+    const code = getCode(dr.id, d);
+    if (!code || isRest(code) || isAbsence(code)) return [];
+    const svcAll = (typeof services === 'function' ? services() : []);
+    const s = svcAll.find((x) => !x.minOf && Array.isArray(x.count) && x.count.indexOf(code) >= 0)
+           || { key: null, label: code, count: [code], filiali: [] };
+    const rules = _rulesCache || [];
+    const ruleOf = (c) => rules.find((x) => x.code === c);
+    const on = (c) => { const r = ruleOf(c); return r ? !!r.enabled : true; };   // default on until loaded
+    const par = (c) => { const r = ruleOf(c); return (r && r.params) || {}; };
+    const out = [];
+    if (on('contract_day')) { const r = SKIP_EVAL.contract_day(dr, d); if (!r.ok) out.push({ rule: 'contract_day', reason: r.reason }); }
+    if (on('qualified') && s.key) { const r = SKIP_EVAL.qualified(dr, d, s); if (!r.ok) out.push({ rule: 'qualified', reason: r.reason }); }
+    if (on('branch_match') && s.key) { const r = SKIP_EVAL.branch_match(dr, d, s, {}, {}, { branch: dr.filiale }); if (!r.ok) out.push({ rule: 'branch_match', reason: r.reason }); }
+    if (on('consecutive')) { const max = +(par('consecutive').maxConsecutive) || 6; if (streakBefore(dr, d, {}) + 1 > max) out.push({ rule: 'consecutive', reason: 'Supera ' + max + ' giorni consecutivi' }); }
+    if (typeof afterExpiry === 'function' && afterExpiry(dr, d)) out.push({ rule: 'contract_end', reason: 'Contratto scaduto' });
+    // Weekly load: worked days in the Sunday-week vs the contract's default days.
+    const ctr = (typeof contracts === 'function' ? contracts() : []).find((c) => c.code === dr.contratto);
+    const maxWk = ctr && Array.isArray(ctr.defDays) ? ctr.defDays.length : (Array.isArray(dr.workDays) ? dr.workDays.length : 7);
+    if (maxWk < 7 && typeof sunWeek === 'function') {
+      const wk = sunWeek(YM, d); let worked = 0;
+      for (let k = wk.start; k <= wk.end; k++) { const c2 = getCode(dr.id, k); if (c2 && !isRest(c2) && !isAbsence(c2)) worked++; }
+      if (worked > maxWk) out.push({ rule: 'weekly_hours', reason: 'Supera i giorni settimanali (' + worked + '/' + maxWk + ')' });
+    }
+    return out;
+  };
+  // Warm the rules cache once so warnings honor the admin's enabled/params
+  // config (built-in defaults apply until it resolves). Fire-and-forget.
+  try { getRules().catch(function () {}); } catch (e) { /* TurniApi not ready */ }
 })();
