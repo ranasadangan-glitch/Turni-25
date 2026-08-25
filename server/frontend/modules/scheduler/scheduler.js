@@ -361,7 +361,25 @@ function renderGrid(){
   /* 3) giorno (+ barra delta) */
   h+="<tr class='dows'><th class='stick c-n'></th><th class='stick c-name'></th>";
   for(const d of visDays){const cls=[isWend(YM,d)?"wend":"",(tIso===YM&&d===tDay)?"today":""].join(" "),pct=heat[d]<0?Math.min(1,heat[d]/minNeg):0,col=heat[d]<0?"var(--bad)":"var(--ok)";h+="<th class='day "+cls+"'><span class='dow'>"+dowName(YM,d)+"</span><span class='heat' title='Delta giorno: "+heat[d]+"' style='background:linear-gradient(90deg,"+col+" "+Math.round(pct*100)+"%,var(--line) 0)'></span></th>";}
-  h+="<th></th><th></th></tr></thead><tbody>";
+  h+="<th></th><th></th></tr>";
+  /* 3b) Live coverage strip — forecast vs pianificati per giorno/servizio.
+     Reuses forecastOf/harmonyOf/scopeServices (same source as the footer); it
+     re-renders on every renderGrid() (i.e. on every cell change), and is shown
+     only when a forecast exists in the current view so teams that don't use
+     forecast keep a clean grid. Colours reuse d-neg (sotto forecast) / d-pos
+     (coperto) / d-zero, the same classes as the Copertura table. */
+  {
+    const _covSvs=scopeServices().filter(s=>!s.minOf);
+    const _covHas=_covSvs.some(s=>visDays.some(d=>forecastOf(s,d)>0));
+    if(_covHas){
+      const _covCls=(p,f)=>f>0?(p<f?"d-neg":"d-pos"):"d-zero";
+      let _agg="<tr class='cov cov-tot'><th class='stick c-n'></th><th class='stick c-name' style='font-size:.62rem;text-transform:uppercase;letter-spacing:.03em'>Copertura</th>";
+      for(const d of visDays){let p=0,f=0;for(const s of _covSvs){p+=harmonyOf(s,d,all);f+=forecastOf(s,d);}const cov=f>0?Math.round(p/f*100):(p?100:0);_agg+="<th class='day "+_covCls(p,f)+"' style='font-size:.62rem' title='Copertura "+fmtDM(YM,d)+": pianificati "+p+" / forecast "+f+" · "+cov+"%'>"+p+"/"+f+"</th>";}
+      _agg+="<th></th><th></th></tr>";h+=_agg;
+      for(const s of _covSvs){if(!visDays.some(d=>forecastOf(s,d)>0))continue;const _lab=esc(s.label||s.key);h+="<tr class='cov'><th class='stick c-n'></th><th class='stick c-name' style='font-size:.6rem;color:var(--muted)' title='"+_lab+"'>"+_lab+"</th>";for(const d of visDays){const p=harmonyOf(s,d,all),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);h+="<th class='day "+_covCls(p,f)+"' style='font-size:.6rem' title='"+_lab+" "+fmtDM(YM,d)+": pianificati "+p+" / forecast "+f+" · "+cov+"%'>"+((f>0||p>0)?p+"/"+f:"")+"</th>";}h+="<th></th><th></th></tr>";}
+    }
+  }
+  h+="</thead><tbody>";
   if(!drivers.length){h+="<tr class='empty'><td colspan='"+(visDays.length+4)+"'>Nessun DAS"+(scopeFil()?" per la filiale "+esc(scopeFil()):"")+". Aggiungilo da Anagrafica DAS o importalo.</td></tr>";}
   drivers.forEach((dr,i)=>{const vflag=consecutiveFlag(dr),viol=Object.keys(vflag).length>0;h+="<tr><td class='stick c-n'>"+(i+1)+"</td><td class='stick c-name'>"+(viol?"<span title='7+ giorni consecutivi senza riposo' style='color:var(--bad)'>⚠️ </span>":"")+esc(dr.cognome)+" "+esc(dr.nome)+"<small>"+esc(dr.filiale)+" · "+esc(dr.service)+"</small></td>";for(const d of visDays){const c=getCode(dr.id,d),cls=codeCls(c);h+="<td id='c_"+dr.id+"_"+d+"' class='cell "+(isWend(YM,d)?"wend":"")+(vflag[d]?" viol":"")+"' onclick='openCellEdit("+dr.id+","+d+")' ondblclick='openPicker("+dr.id+","+d+")'>"+(c?"<span class='chip' style='background:var(--"+cls+"-bg);color:var(--"+cls+")'>"+esc(c)+"</span>":"")+"</td>";}h+="<td class='c-tot'>"+workedDays(dr,visDays)+"</td><td class='c-ctr'>"+esc(dr.contratto||"")+"</td></tr>";});
   const foot=(lbl,arr,neg)=>{let r="<tr class='foot'><td class='stick c-n'></td><td class='stick lbl'>"+lbl+"</td>";arr.forEach(v=>{r+="<td class='"+(neg&&v>0?"neg":"")+"'>"+v+"</td>";});return r+"<td>"+arr.reduce((a,b)=>a+b,0)+"</td><td></td></tr>";};
