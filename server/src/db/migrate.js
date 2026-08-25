@@ -67,6 +67,10 @@ async function ensureAdmin() {
     // duplicate forecast stores were unified into schedule_forecasts. 17 drops
     // them where they still exist (older environments).
     await runFile(path.join(root, 'schema', '17_drop_forecast_dup.sql'));
+    // 18 — additive compatibility view (v_schedule_days): presents
+    // schedule_entries in the legacy per-day (work_date) shape so legacy
+    // readers can migrate onto the real source of truth. Non-destructive.
+    await runFile(path.join(root, 'schema', '18_schedule_view.sql'));
     // Seed the default scheduling rules once (skipped if any row exists).
     {
       const rc = await pool.query('SELECT count(*)::int AS c FROM scheduling_rules');
