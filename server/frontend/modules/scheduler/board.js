@@ -191,6 +191,28 @@ renderGrid = function() {
     html+='<div class="'+dayCls(d)+'"><span class="dow">'+dowName(YM,d).toUpperCase()+'</span></div>';
   });
   html+='<div class="col-tot-h"></div></div>';
+  // Coverage strip (Scheduler UX #1) — per-day/per-service forecast coverage,
+  // reusing forecastOf/harmonyOf/scopeServices (same source as the footer). Only
+  // shown when a forecast exists in the current view, so teams that don't use
+  // forecast keep a clean board. Re-rendered on every renderGrid() (cell change).
+  (function(){
+    if(typeof scopeServices!=='function'||typeof forecastOf!=='function'||typeof harmonyOf!=='function')return;
+    var covS=scopeServices().filter(function(s){return !s.minOf;});
+    if(!covS.some(function(s){return visDays.some(function(d){return forecastOf(s,d)>0;});}))return;
+    var col=function(p,f){return f>0?(p<f?'var(--bad)':'var(--ok)'):'var(--muted)';};
+    html+='<div class="board-thead cov-strip cov-strip-tot" style="grid-template-columns:'+colT+'">'+
+      '<div class="col-emp-h" style="font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700">Copertura</div>';
+    visDays.forEach(function(d){var p=0,f=0;covS.forEach(function(s){p+=harmonyOf(s,d,all);f+=forecastOf(s,d);});var cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.62rem;font-weight:600;color:'+col(p,f)+'" title="Copertura '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+p+'/'+f+'</div>';});
+    html+='<div class="col-tot-h"></div></div>';
+    covS.forEach(function(s){
+      if(!visDays.some(function(d){return forecastOf(s,d)>0;}))return;
+      var lab=esc(s.label||s.key);
+      html+='<div class="board-thead cov-strip" style="grid-template-columns:'+colT+'">'+
+        '<div class="col-emp-h" style="font-size:.58rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+lab+'">'+lab+'</div>';
+      visDays.forEach(function(d){var p=harmonyOf(s,d,all),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.58rem;color:'+col(p,f)+'" title="'+lab+' '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+((f>0||p>0)?p+'/'+f:'')+'</div>';});
+      html+='<div class="col-tot-h"></div></div>';
+    });
+  })();
   if(!drivers.length){
     _vTeardown();
     var biE=document.getElementById('boardInner');biE.classList.remove('v-on');
@@ -237,7 +259,13 @@ renderGrid = function() {
       }
       var code=getCode(dr.id,d),cls=codeCls(code),cst=getCLS(cls);
       var isT=nowISO===YM&&d===nowDay,isW=[0,6].includes(new Date(YM+'-'+String(d).padStart(2,'0')).getDay()),isV=!!vflag[d];
-      h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell'+(isT?' today-sc':'')+(isW?' wend-sc':'')+(isV?' viol-sc':'')+wkSep(d)+'"'+
+      // Inline rule validation (Scheduler UX #2): warn on manual working shifts
+      // that violate the scheduling_rules. Reuses window.cellWarnings (same
+      // predicates as generation). Only working codes are checked.
+      var _w=(code&&typeof cellWarnings==='function')?cellWarnings(dr,d):[];
+      var _wt=_w.length?esc(_w.map(function(x){return x.reason;}).join(' · ')):'';
+      h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell'+(isT?' today-sc':'')+(isW?' wend-sc':'')+(isV?' viol-sc':'')+(_w.length?' rulewarn-sc':'')+wkSep(d)+'"'+
+        (_w.length?(' title="⚠ '+_wt+'" style="position:relative"'):'')+
         ' onclick="cellClick(event,'+dr.id+','+d+')"'+
         ' ondblclick="spOpenPanel('+dr.id+','+d+')"'+
         ' oncontextmenu="event.shiftKey?cellPopBrush(event,\''+esc(code||'')+'\'):boardCtxOpen(event,'+dr.id+','+d+')"'+
@@ -251,6 +279,7 @@ renderGrid = function() {
           ' style="background:'+cst.bg+';color:'+cst.fg+';border-color:'+cst.br+'"'+
           ' title="'+esc(codeLabel(code))+'">'+esc(code)+'</div>';
       }
+      if(_w.length)h+='<span class="rw-mark" style="position:absolute;top:0;right:1px;font-size:9px;line-height:1;color:var(--bad);pointer-events:none;z-index:1">⚠</span>';
       h+='</div>';
     });
     h+='<div class="tot-sc">'+wTotal+'</div></div>';
@@ -341,6 +370,26 @@ window.schedSelectEmp=function(id){
   var prev=b.querySelector('.emp-board-row.emp-row-sel'); if(prev)prev.classList.remove('emp-row-sel');
   var row=b.querySelector('.emp-board-row[data-drv="'+id+'"]'); if(row)row.classList.add('emp-row-sel');
 };
+// Re-apply the inline rule-warning marker (#2) to one cell after a partial
+// (paint) update, so warnings stay live without a full re-render. Reuses
+// window.cellWarnings — same predicates as generation.
+function markCellWarn(id,d){
+  var td=document.getElementById('c_'+id+'_'+d); if(!td)return;
+  var dr=state.drivers.find(function(x){return x.id===id;});
+  var w=(dr&&typeof cellWarnings==='function')?cellWarnings(dr,d):[];
+  var ex=td.querySelector('.rw-mark'); if(ex)ex.remove();
+  td.classList.toggle('rulewarn-sc',w.length>0);
+  if(w.length){
+    td.style.position='relative';
+    td.title='⚠ '+w.map(function(x){return x.reason;}).join(' · ');
+    var s=document.createElement('span');
+    s.className='rw-mark';
+    s.textContent='⚠';
+    s.style.cssText='position:absolute;top:0;right:1px;font-size:9px;line-height:1;color:var(--bad);pointer-events:none;z-index:1';
+    td.appendChild(s);
+  }else if(td.title&&td.title.charAt(0)==='⚠'){ td.removeAttribute('title'); }
+}
+window.markCellWarn=markCellWarn;
 function boardDragStart(e,id,d){_bdSrc={id,d,code:getCode(id,d)};e.dataTransfer.effectAllowed='copyMove';e.target.classList.add('dragging');}
 function boardDragEnd(){document.querySelectorAll('.shift-card.dragging').forEach(function(el){el.classList.remove('dragging');});_bdSrc=null;}
 function boardDragOver(e,cell){if(!_bdSrc)return;e.preventDefault();var copy=e.altKey||e.ctrlKey;cell.classList.toggle('drag-over',!copy);cell.classList.toggle('copy-over',copy);}

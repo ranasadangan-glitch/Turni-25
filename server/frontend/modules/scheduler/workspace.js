@@ -140,6 +140,7 @@
     // footer KPIs must update on every single-cell change without a re-render.
     if (typeof updateRowTotal === 'function') { try { updateRowTotal(id); } catch (e) {} }
     if (typeof refreshBottomBar === 'function') { try { refreshBottomBar(); } catch (e) {} }
+    if (typeof markCellWarn === 'function') { try { markCellWarn(id, d); } catch (e) {} }   // keep inline rule warnings live under paint
   }
 
   // ── Compact assignment popover ─────────────────────────────────────
