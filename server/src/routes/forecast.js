@@ -54,7 +54,7 @@ router.get('/dashboard', async (req, res) => {
        GROUP BY 1,2,3),
     pl AS (
       SELECT e.branch_id, st.id AS service_type_id, s.work_date AS d, count(*) planned
-        FROM schedules s
+        FROM v_schedule_days s
         JOIN employees e ON e.id=s.employee_id
         JOIN branches b ON b.id=e.branch_id
         JOIN service_types st ON st.default_shift_code = s.shift_code
