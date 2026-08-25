@@ -29,12 +29,17 @@ router.put('/', requirePermission('schedule.manage'), async (req, res) => {
   const { employee_id, work_date, shift_code } = req.body || {};
   if (!employee_id || !work_date) return res.status(400).json({ error: 'Dati mancanti' });
   if (!shift_code) {
-    await pool.query('DELETE FROM schedules WHERE employee_id=$1 AND work_date=$2', [employee_id, work_date]);
+    await pool.query(
+      `DELETE FROM schedule_entries WHERE employee_id=$1
+         AND schedule_month=date_trunc('month',$2::date)::date
+         AND day_of_month=EXTRACT(DAY FROM $2::date)::int`,
+      [employee_id, work_date]);
   } else {
     await pool.query(
-      `INSERT INTO schedules (employee_id, work_date, shift_code, updated_by)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (employee_id, work_date)
+      `INSERT INTO schedule_entries (schedule_month, employee_id, day_of_month, shift_code, branch_code, updated_by)
+       VALUES (date_trunc('month',$2::date)::date, $1, EXTRACT(DAY FROM $2::date)::int, $3,
+               (SELECT b.code FROM employees e LEFT JOIN branches b ON b.id=e.branch_id WHERE e.id=$1), $4)
+       ON CONFLICT (employee_id, schedule_month, day_of_month) WHERE employee_id IS NOT NULL
        DO UPDATE SET shift_code=EXCLUDED.shift_code, updated_by=EXCLUDED.updated_by, updated_at=now()`,
       [employee_id, work_date, shift_code, req.user.username]
     );
@@ -49,12 +54,17 @@ router.post('/bulk', requirePermission('schedule.manage'), async (req, res) => {
   await withTx(async (c) => {
     for (const it of items) {
       if (!it.shift_code) {
-        await c.query('DELETE FROM schedules WHERE employee_id=$1 AND work_date=$2', [it.employee_id, it.work_date]);
+        await c.query(
+          `DELETE FROM schedule_entries WHERE employee_id=$1
+             AND schedule_month=date_trunc('month',$2::date)::date
+             AND day_of_month=EXTRACT(DAY FROM $2::date)::int`,
+          [it.employee_id, it.work_date]);
       } else {
         await c.query(
-          `INSERT INTO schedules (employee_id, work_date, shift_code, updated_by)
-           VALUES ($1,$2,$3,$4)
-           ON CONFLICT (employee_id, work_date)
+          `INSERT INTO schedule_entries (schedule_month, employee_id, day_of_month, shift_code, branch_code, updated_by)
+           VALUES (date_trunc('month',$2::date)::date, $1, EXTRACT(DAY FROM $2::date)::int, $3,
+                   (SELECT b.code FROM employees e LEFT JOIN branches b ON b.id=e.branch_id WHERE e.id=$1), $4)
+           ON CONFLICT (employee_id, schedule_month, day_of_month) WHERE employee_id IS NOT NULL
            DO UPDATE SET shift_code=EXCLUDED.shift_code, updated_by=EXCLUDED.updated_by, updated_at=now()`,
           [it.employee_id, it.work_date, it.shift_code, req.user.username]
         );
@@ -71,8 +81,9 @@ router.post('/copy', requirePermission('schedule.manage'), async (req, res) => {
   const { from_start, to_start, days } = req.body || {};
   if (!from_start || !to_start || !days) return res.status(400).json({ error: 'Parametri mancanti' });
   const src = await pool.query(
-    `SELECT employee_id, work_date, shift_code FROM schedules
-      WHERE work_date >= $1 AND work_date < ($1::date + $2::int)`,
+    `SELECT employee_id, work_date, shift_code FROM v_schedule_days
+      WHERE employee_id IS NOT NULL
+        AND work_date >= $1 AND work_date < ($1::date + $2::int)`,
     [from_start, days]
   );
   const offset = (new Date(to_start) - new Date(from_start)) / 86400000;
@@ -81,9 +92,10 @@ router.post('/copy', requirePermission('schedule.manage'), async (req, res) => {
       const nd = new Date(r.work_date); nd.setDate(nd.getDate() + offset);
       const iso = nd.toISOString().slice(0, 10);
       await c.query(
-        `INSERT INTO schedules (employee_id, work_date, shift_code, updated_by)
-         VALUES ($1,$2,$3,$4)
-         ON CONFLICT (employee_id, work_date)
+        `INSERT INTO schedule_entries (schedule_month, employee_id, day_of_month, shift_code, branch_code, updated_by)
+         VALUES (date_trunc('month',$2::date)::date, $1, EXTRACT(DAY FROM $2::date)::int, $3,
+                 (SELECT b.code FROM employees e LEFT JOIN branches b ON b.id=e.branch_id WHERE e.id=$1), $4)
+         ON CONFLICT (employee_id, schedule_month, day_of_month) WHERE employee_id IS NOT NULL
          DO UPDATE SET shift_code=EXCLUDED.shift_code, updated_by=EXCLUDED.updated_by, updated_at=now()`,
         [r.employee_id, iso, r.shift_code, req.user.username]
       );
