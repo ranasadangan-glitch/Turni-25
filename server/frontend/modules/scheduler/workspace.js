@@ -35,6 +35,8 @@
     var bi = document.getElementById('boardInner'); if (bi) bi.style.zoom = z;
     var lbl = document.getElementById('zoomLbl'); if (lbl) lbl.textContent = Math.round(z * 100) + '%';
     try { localStorage.setItem('turniDSP_zoom', z); } catch (e) {}
+    // Re-window the virtualized rows for the new zoom (no-op when not virtualizing).
+    if (typeof window._schedRewindow === 'function') window._schedRewindow();
   }
   window.setZoom = function (z) { z = parseFloat(z) || 1; _applyZoom(z); };
   window.stepZoom = function (dir) {

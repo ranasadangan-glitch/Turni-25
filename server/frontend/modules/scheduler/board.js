@@ -334,9 +334,9 @@ renderGrid = function() {
   function itemHTML(it){ return it.t==='g'?ghHTML(it.grp,it.collapsed):drHTML(it.dr,it.grp); }
 
   var bi=document.getElementById('boardInner');
-  var zoom=parseFloat(bi.style.zoom||'1')||1;
-  // Full render for normal rosters (and while zoomed) — identical to before.
-  if(flat.length<=VIRTUAL_MIN||zoom!==1){
+  // Full render only for small rosters; large rosters stay virtualized at every
+  // zoom level — the windowing math in _vStart is zoom-aware.
+  if(flat.length<=VIRTUAL_MIN){
     _vTeardown();
     bi.classList.remove('v-on');
     for(var fi=0;fi<flat.length;fi++) html+=itemHTML(flat[fi]);
@@ -374,8 +374,13 @@ function _vStart(flat,itemHTML){
   function render(){
     st.raf=0;
     if(_vState!==st||!document.getElementById('vTop'))return;  // superseded / torn down
-    var contentTop=top.getBoundingClientRect().top;            // viewport y of list start
-    var a=-contentTop-V_BUFFER, b=window.innerHeight-contentTop+V_BUFFER;
+    var contentTop=top.getBoundingClientRect().top;            // viewport y of list start (zoom-scaled)
+    // Zoom-aware windowing: offs[]/spacer heights are unzoomed layout px, but
+    // contentTop and innerHeight are screen px. Divide the viewport window by the
+    // live CSS zoom so both sides of the offs[] comparisons are in layout space.
+    // At zoom 1 (z===1) this is byte-identical to the previous math.
+    var _bi=document.getElementById('boardInner'),z=(_bi&&parseFloat(_bi.style.zoom))||1;
+    var a=(-contentTop-V_BUFFER)/z, b=(window.innerHeight-contentTop+V_BUFFER)/z;
     var start=0; while(start<flat.length&&offs[start+1]<a) start++;
     var end=start; while(end<flat.length&&offs[end]<b) end++;
     if(start===st.lastStart&&end===st.lastEnd) return;
@@ -391,6 +396,10 @@ function _vStart(flat,itemHTML){
   _vState=st;
   render();
 }
+// Re-window the virtualized list after a zoom change: CSS zoom scales row heights
+// but does not re-render, so the visible window must be recomputed for the new
+// zoom. No-op when not virtualizing. Reuses the existing scroll-driven render.
+window._schedRewindow=function(){ if(_vState&&_vState.onScroll)_vState.onScroll(); };
 
 // ── goToToday / shiftWeek ────────────────────────────────────────
 function goToToday(){
