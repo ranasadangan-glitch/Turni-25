@@ -309,17 +309,24 @@ else _restoreNavGroups();
 
 // ── setSaveState (SPA version - updates both places) ─────────────
 function setSaveState(st) {
-  var el1 = document.getElementById('saveState');
-  var el2 = document.getElementById('schedSaveState');
   var ns  = document.getElementById('navSync');
-  var text = '';
-  if (st === 'saving') text = '⏳ salvataggio…';
-  else if (st === 'saved')  text = '✓ salvato ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-  else if (st === 'error')  text = '✗ errore DB';
-  else if (st === 'queued') text = '⏳ in coda…';
-  else if (st === 'local')  text = '💾 locale';
-  if (el1) el1.textContent = text;
-  if (el2) el2.textContent = text;
+  // Keep the unsaved-count / last-saved pill (#5) authoritative: map the autosave
+  // lifecycle onto its in-flight + last-saved state and let _schedRenderSave draw.
+  if (st === 'saved') { window._schedLastSavedAt = Date.now(); window._schedSaving = false; }
+  else if (st === 'saving' || st === 'queued') { window._schedSaving = true; }
+  else { window._schedSaving = false; }
+  if (typeof window._schedRenderSave === 'function') {
+    window._schedRenderSave();
+  } else {
+    // Fallback before scheduler.js has loaded: original transient text.
+    var text = st==='saving' ? '⏳ salvataggio…'
+             : st==='saved'  ? '✓ salvato ' + new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})
+             : st==='error'  ? '✗ errore DB'
+             : st==='queued' ? '⏳ in coda…'
+             : st==='local'  ? '💾 locale' : '';
+    var el1 = document.getElementById('saveState'); if (el1) el1.textContent = text;
+    var el2 = document.getElementById('schedSaveState'); if (el2) el2.textContent = text;
+  }
   if (ns && DB_SYNC) {
     ns.textContent = st==='saved'?'🟢 DB OK': st==='error'?'🔴 DB errore':'🔵 In sync…';
   }
@@ -331,7 +338,7 @@ saveAll = function(manual) {
   setSaveState(DB_SYNC ? 'queued' : 'local');
   if (manual) toast(DB_SYNC ? 'Salvataggio in corso…' : 'Dati salvati in locale');
   if (DB_SYNC) { clearTimeout(dbSyncTimer); dbSyncTimer = setTimeout(saveMonthToDB, 1200); }
-  else { try { localStorage.setItem(lsKey(YM), JSON.stringify(state)); } catch(_) {} }
+  else { try { localStorage.setItem(lsKey(YM), JSON.stringify(state)); } catch(_) {} if (typeof _schedMarkSaved === 'function') _schedMarkSaved(); }
 };
 
 // ── setView override (SPA toolbar sync) ──────────────────────────

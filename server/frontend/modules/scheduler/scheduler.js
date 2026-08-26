@@ -128,7 +128,7 @@ async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedule
 // Refetch the roster from the employees-backed month endpoint (spec §14) so
 // employee create/edit/delete reflect in the scheduler without a page refresh.
 window.syncSchedulerFromDB=async function(){try{if(typeof state==="undefined"||!state)return;const br=teamFiliale||(filiali()[0]||"DLO1");await loadMonthFromDB(YM,br);if(typeof refreshAll==="function")refreshAll();}catch(e){}};
-async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved();}catch(e){console.warn("[DB]",e.message);const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
+async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved();}catch(e){console.warn("[DB]",e.message);window._schedSaving=false;const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
 let saveTimer=null;
 function saveAll(manual){
   // Write to localStorage as offline cache
@@ -164,18 +164,31 @@ function _recordEdit(id,d){
   _schedPendingBadge();
 }
 function _schedPendingCount(){return Object.keys(_cellUnsaved).length;}
-function _schedPendingBadge(){
-  var el=document.getElementById("saveState");if(!el)return;
+window._schedLastSavedAt=window._schedLastSavedAt||null;   // ms of last successful save (this session)
+window._schedSaving=false;                                 // a persist is currently in flight
+// Single source of truth for the save-status pill (Scheduler UX #5): show the
+// UNSAVED CHANGE COUNT while edits are pending, otherwise the LAST SAVED time.
+// Reuses the existing _cellUnsaved set + the autosave lifecycle; no DB/engine change.
+function _schedSaveText(){
   var n=_schedPendingCount();
-  if(n>0)el.textContent="● "+n+" non salvat"+(n===1?"a":"e");
+  var last=window._schedLastSavedAt?new Date(window._schedLastSavedAt).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}):"";
+  if(n>0)return (window._schedSaving?"⏳ ":"● ")+n+" modific"+(n===1?"a":"he")+" non salvat"+(n===1?"a":"e")+(last?(" · ultimo salv. "+last):"");
+  return last?("✓ Tutto salvato · "+last):"";
 }
+window._schedRenderSave=function(){
+  var t=_schedSaveText();
+  var a=document.getElementById("saveState");if(a)a.textContent=t;
+  var b=document.getElementById("schedSaveState");if(b)b.textContent=t;
+};
+function _schedPendingBadge(){ window._schedRenderSave(); }
 // Called after a successful persist: clears the unsaved flags, refreshes the
 // per-cell markers and the pill. The by/when tooltip is kept for the session.
 function _schedMarkSaved(){
   var ids=Object.keys(_cellUnsaved);_cellUnsaved={};
   ids.forEach(function(k){var p=k.split("_"),id=+p[0],d=+p[1];if(typeof markCellEdit==="function"){try{markCellEdit(id,d);}catch(e){}}});
-  var el=document.getElementById("saveState");
-  if(el)el.textContent="✓ salvato "+new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+  window._schedLastSavedAt=Date.now();
+  window._schedSaving=false;
+  window._schedRenderSave();
 }
 // Public accessor for the renderer: the tooltip note + saved/unsaved flag.
 // A session edit (recorded this session) always wins and carries the live
