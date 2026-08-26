@@ -720,7 +720,7 @@ router.get('/month', async (req, res) => {
             AND (e.contract_start_date IS NULL OR e.contract_start_date <  ($2::date + interval '1 month'))
           ORDER BY e.last_name, e.first_name`, [branch, month]),
       pool.query(
-        `SELECT employee_id, local_driver_id, day_of_month, shift_code
+        `SELECT employee_id, local_driver_id, day_of_month, shift_code, updated_by, updated_at
            FROM schedule_entries WHERE schedule_month=$1 AND ($2='' OR branch_code=$2)`, [month, branch]),
       pool.query(
         `SELECT service_key, day_of_month, qty
@@ -731,10 +731,18 @@ router.get('/month', async (req, res) => {
 
     // Reconstruct the state{} shape the scheduler expects
     const scheduleMap = {};
+    // Persisted per-cell attribution (#5): last human editor + time, keyed the
+    // same way as scheduleMap. Engine-generated cells (updated_by='auto-engine')
+    // are excluded so only manual edits/overrides carry a marker after reload.
+    const scheduleMeta = {};
     for (const r of entries.rows) {
       const did = r.employee_id || r.local_driver_id;
       if (!scheduleMap[did]) scheduleMap[did] = {};
       scheduleMap[did][r.day_of_month] = r.shift_code;
+      if (r.updated_by && r.updated_by !== 'auto-engine') {
+        if (!scheduleMeta[did]) scheduleMeta[did] = {};
+        scheduleMeta[did][r.day_of_month] = { by: r.updated_by, at: r.updated_at };
+      }
     }
     const forecastMap = {};
     for (const r of forecasts.rows) {
@@ -748,6 +756,7 @@ router.get('/month', async (req, res) => {
       meta: { month: req.query.month, branch, source: 'postgresql' },
       drivers: drivers.rows,
       schedule: scheduleMap,
+      scheduleMeta,
       forecast: forecastMap,
       config: configMap,
     });

@@ -124,7 +124,7 @@ function loadMonth(){
 function migrate(){if(!state.meta)state.meta={};if(!state.log)state.log=[];if(!state.config)state.config=loadGlobalConfig();if(!state.config.filDetails)state.config.filDetails={};["groups","codes","contracts","services","counters","filiali","users","serviceTypes","customCounters"].forEach(k=>{if(!state.config[k])state.config[k]=defaultConfig()[k];});state.config.services.forEach(s=>{if(!Array.isArray(s.filiali))s.filiali=[];});(state.config.users||[]).forEach(u=>{if(!Array.isArray(u.filiali))u.filiali=u.filiale?[u.filiale]:(filiali().length?[filiali()[0]]:[]);});state.drivers.forEach(d=>{if(!d.status)d.status="active";if(!("ctrType"in d))d.ctrType="indeterminato";if(!("expiry"in d))d.expiry=null;if(!Array.isArray(d.workDays))d.workDays=(contracts().find(c=>c.code===d.contratto)||{}).defDays||[1,2,3,4,5];if(!d.defaultCode)d.defaultCode=defCode(d.service);if(!d.filiale)d.filiale=filiali()[0]||"DLO1";if(!("transporterId"in d))d.transporterId="";if(!("device"in d))d.device="";if(!("hireDate"in d))d.hireDate="";});}
 /* ---- DB sync (write-through: localStorage cache + async DB save) ---- */
 const DB_SYNC=!!(typeof TurniApi!=="undefined"&&TurniApi.isLoggedIn&&TurniApi.isLoggedIn());let dbSyncTimer=null;
-async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedulerMonth(ym,branch);if(data&&data.meta&&data.meta.source==="postgresql"){if(Array.isArray(data.drivers))state.drivers=data.drivers.map(d=>({id:d.id,cognome:d.cognome,nome:d.nome,filiale:d.filiale,service:d.service,contratto:d.contratto,ctrType:d.ctr_type||"indeterminato",expiry:d.expiry_date?String(d.expiry_date).slice(0,10):null,workDays:d.work_days||[1,2,3,4,5],defaultCode:d.default_code,status:d.status,transporterId:d.transporter_id||"",device:d.device||"",hireDate:d.hire_date||""}));if(data.schedule)state.schedule=data.schedule;if(data.forecast&&Object.keys(data.forecast).length)state.forecast=data.forecast;if(data.config&&Object.keys(data.config).length)state.config=Object.assign(state.config||{},data.config);sanitizeExpiredOff();localStorage.setItem(lsKey(YM),JSON.stringify(state));return true;}}catch(e){console.warn("[scheduler] DB load:",e.message);}return false;}
+async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedulerMonth(ym,branch);if(data&&data.meta&&data.meta.source==="postgresql"){if(Array.isArray(data.drivers))state.drivers=data.drivers.map(d=>({id:d.id,cognome:d.cognome,nome:d.nome,filiale:d.filiale,service:d.service,contratto:d.contratto,ctrType:d.ctr_type||"indeterminato",expiry:d.expiry_date?String(d.expiry_date).slice(0,10):null,workDays:d.work_days||[1,2,3,4,5],defaultCode:d.default_code,status:d.status,transporterId:d.transporter_id||"",device:d.device||"",hireDate:d.hire_date||""}));if(data.schedule)state.schedule=data.schedule;window._cellMetaDB=data.scheduleMeta||{};if(data.forecast&&Object.keys(data.forecast).length)state.forecast=data.forecast;if(data.config&&Object.keys(data.config).length)state.config=Object.assign(state.config||{},data.config);sanitizeExpiredOff();localStorage.setItem(lsKey(YM),JSON.stringify(state));return true;}}catch(e){console.warn("[scheduler] DB load:",e.message);}return false;}
 // Refetch the roster from the employees-backed month endpoint (spec §14) so
 // employee create/edit/delete reflect in the scheduler without a page refresh.
 window.syncSchedulerFromDB=async function(){try{if(typeof state==="undefined"||!state)return;const br=teamFiliale||(filiali()[0]||"DLO1");await loadMonthFromDB(YM,br);if(typeof refreshAll==="function")refreshAll();}catch(e){}};
@@ -153,8 +153,9 @@ function logAction(a){if(!state.log)state.log=[];state.log.push({t:new Date().to
    Client-only, session-scoped. Records who/when for cells edited in THIS
    session and which cells are not yet persisted. Reuses actorName() and the
    existing #saveState pill and per-cell marker pattern; no DB/engine change. */
-var _cellEdits={};                       // _cellEdits[id][d] = {by, at}
+var _cellEdits={};                       // _cellEdits[id][d] = {by, at} (this session)
 var _cellUnsaved={};                     // _cellUnsaved["id_d"] = true (pending save)
+window._cellMetaDB=window._cellMetaDB||{};  // _cellMetaDB[id][d] = {by, at(ISO)} persisted human edits from DB (/scheduler/month)
 function _recordEdit(id,d){
   if(!_cellEdits[id])_cellEdits[id]={};
   _cellEdits[id][d]={by:actorName(),at:Date.now()};
@@ -177,10 +178,21 @@ function _schedMarkSaved(){
   if(el)el.textContent="✓ salvato "+new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
 }
 // Public accessor for the renderer: the tooltip note + saved/unsaved flag.
+// A session edit (recorded this session) always wins and carries the live
+// saved/unsaved state; otherwise the persisted last human editor from the DB
+// snapshot is shown (always saved). Returns null when neither exists.
 window._cellEditNote=function(id,d){
-  var e=_cellEdits[id]&&_cellEdits[id][d];if(!e)return null;
-  var t=new Date(e.at).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
-  return {by:e.by,at:t,unsaved:!!_cellUnsaved[id+"_"+d]};
+  var e=_cellEdits[id]&&_cellEdits[id][d];
+  if(e){
+    var t=new Date(e.at).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+    return {by:e.by,at:t,unsaved:!!_cellUnsaved[id+"_"+d]};
+  }
+  var m=window._cellMetaDB&&window._cellMetaDB[id]&&window._cellMetaDB[id][d];
+  if(m){
+    var dt=new Date(m.at),at=isNaN(dt.getTime())?String(m.at):dt.toLocaleString("it-IT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    return {by:m.by,at:at,unsaved:false};
+  }
+  return null;
 };
 
 /* ---------- config helper ---------- */
