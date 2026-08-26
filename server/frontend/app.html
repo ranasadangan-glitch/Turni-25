@@ -349,6 +349,12 @@
             <button data-pm="month" onclick="setPlanMode('month')">Mese</button>
           </div>
           <div class="t-divider"></div>
+          <span class="sch-quicksearch">
+            <input type="search" id="qBar" placeholder="🔍 Cerca DAS…" autocomplete="off"
+                   oninput="schedSearchInput(this.value)" onkeydown="schedSearchKey(event)"
+                   title="Cerca dipendente: nome, cognome, ID, badge, filiale, servizio (Ctrl+F)">
+          </span>
+          <div class="t-divider"></div>
           <div class="zoom-ctrl" title="Zoom scheduler">
             <button class="zoom-btn" onclick="stepZoom(-1)" aria-label="Riduci">−</button>
             <span id="zoomLbl">100%</span>

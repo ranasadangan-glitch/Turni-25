@@ -224,6 +224,10 @@
   var _searchTimer = null;
   window.schedSearchInput = function (v) {
     var q = document.getElementById('q'); if (q) q.value = v;   // reuse existing #q + filteredDrivers()
+    // Keep the toolbar quick-search (#qBar) and the filter-bar search (#sfbSearch)
+    // in sync whichever box was typed in — same mirror the persistence path uses.
+    var qb = document.getElementById('qBar'); if (qb && qb.value !== v) qb.value = v;
+    var sf = document.getElementById('sfbSearch'); if (sf && sf.value !== v) sf.value = v;
     var x = document.getElementById('sfbSearchX'); if (x) x.style.display = v ? '' : 'none';
     clearTimeout(_searchTimer);
     // Debounced (~220ms) so typing stays smooth with 1000+ drivers.
