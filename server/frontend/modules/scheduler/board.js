@@ -348,10 +348,23 @@ function _vStart(flat,itemHTML){
 
 // ── goToToday / shiftWeek ────────────────────────────────────────
 function goToToday(){
+  // Bring today into view (#4). Opt out of the renderGrid wrapper's scroll
+  // restoration (§4) so the board doesn't snap back to its old horizontal
+  // position, then centre today's column after the render — reusing the
+  // existing .today-h/.today-sc markers and the same scrollIntoView pattern as
+  // the filter bar's today-jump.
+  window._schedScrollToToday=true;
   var ti=new Date().toISOString().slice(0,7);
-  if(ti!==YM){YM=ti;weekIdx=0;loadMonth();return;}
-  var weeks=monthWeeks(),td=new Date().getDate();weekIdx=0;dayCursor=td;
-  for(var i=0;i<weeks.length;i++){if(weeks[i].days.includes(td)){weekIdx=i;break;}}renderGrid();
+  if(ti!==YM){YM=ti;weekIdx=0;loadMonth();}
+  else{
+    var weeks=monthWeeks(),td=new Date().getDate();weekIdx=0;dayCursor=td;
+    for(var i=0;i<weeks.length;i++){if(weeks[i].days.includes(td)){weekIdx=i;break;}}renderGrid();
+  }
+  setTimeout(function(){
+    var bo=document.getElementById('boardOuter'),t=bo&&bo.querySelector('.today-h, .today-sc');
+    if(t&&t.scrollIntoView){try{t.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});}catch(e){t.scrollIntoView();}}
+    window._schedScrollToToday=false;
+  },80);
 }
 function shiftWeek(dir){
   if(planMode==='day'){dayCursor=Math.max(1,Math.min(daysInMonth(YM),dayCursor+dir));renderGrid();}
