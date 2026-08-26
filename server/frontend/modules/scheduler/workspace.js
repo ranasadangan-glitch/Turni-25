@@ -141,6 +141,7 @@
     _raf(function () {
       _barPending = false;
       if (typeof refreshBottomBar === 'function') { try { refreshBottomBar(); } catch (e) {} }
+      if (typeof refreshCovStrip === 'function') { try { refreshCovStrip(); } catch (e) {} }   // keep the header coverage strip (#1) in sync under bulk paint
     });
   }
 

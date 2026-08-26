@@ -105,6 +105,48 @@ function updateRowTotal(id){
   tot.textContent=workedDays(dr,gridDays);
 }
 
+// Coverage-strip markup (Scheduler UX #1), extracted from renderGrid so the same
+// rows can be rebuilt live during the #3 bulk-paint path without a full render.
+// Returns null when the forecast helpers aren't loaded, '' when no forecast is
+// present in the view (strip hidden), otherwise the strip's thead rows. Reads the
+// same forecastOf/harmonyOf/scopeServices sources as the footer — no new data.
+function covStripHTML(visDays,colT,all,dayCls){
+  if(typeof scopeServices!=='function'||typeof forecastOf!=='function'||typeof harmonyOf!=='function')return null;
+  var covS=scopeServices().filter(function(s){return !s.minOf;});
+  if(!covS.some(function(s){return visDays.some(function(d){return forecastOf(s,d)>0;});}))return '';
+  var col=function(p,f){return f>0?(p<f?'var(--bad)':'var(--ok)'):'var(--muted)';};
+  var html='<div class="board-thead cov-strip cov-strip-tot" style="grid-template-columns:'+colT+'">'+
+    '<div class="col-emp-h" style="font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700">Copertura</div>';
+  visDays.forEach(function(d){var p=0,f=0;covS.forEach(function(s){p+=harmonyOf(s,d,all);f+=forecastOf(s,d);});var cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.62rem;font-weight:600;color:'+col(p,f)+'" title="Copertura '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+p+'/'+f+'</div>';});
+  html+='<div class="col-tot-h"></div></div>';
+  covS.forEach(function(s){
+    if(!visDays.some(function(d){return forecastOf(s,d)>0;}))return;
+    var lab=esc(s.label||s.key);
+    html+='<div class="board-thead cov-strip" style="grid-template-columns:'+colT+'">'+
+      '<div class="col-emp-h" style="font-size:.58rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+lab+'">'+lab+'</div>';
+    visDays.forEach(function(d){var p=harmonyOf(s,d,all),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.58rem;color:'+col(p,f)+'" title="'+lab+' '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+((f>0||p>0)?p+'/'+f:'')+'</div>';});
+    html+='<div class="col-tot-h"></div></div>';
+  });
+  return html;
+}
+// Re-sync the coverage strip (#1) in place during the #3 bulk-paint path, which
+// updates cells via _paintCellDom and never calls renderGrid. Rebuilds the strip
+// markup from live state (reusing the layout context stashed by the last render)
+// and swaps the existing .cov-strip rows. No-op when no strip is shown; paint
+// never changes the forecast, only the planned count, so the strip stays present.
+function refreshCovStrip(){
+  var bi=document.getElementById('boardInner');if(!bi)return;
+  var strips=bi.querySelectorAll('.cov-strip');if(!strips.length)return;
+  var ctx=window._covCtx;if(!ctx)return;
+  var html=covStripHTML(ctx.visDays,ctx.colT,scopedActive(),ctx.dayCls);
+  if(!html)return;
+  var first=strips[0],tmp=document.createElement('div');tmp.innerHTML=html;
+  var frag=document.createDocumentFragment();while(tmp.firstChild)frag.appendChild(tmp.firstChild);
+  first.parentNode.insertBefore(frag,first);
+  strips.forEach(function(n){n.remove();});
+}
+window.refreshCovStrip=refreshCovStrip;
+
 renderGrid = function() {
   var allDays=[]; for(var dd=1;dd<=daysInMonth(YM);dd++) allDays.push(dd);
   var weeks=monthWeeks();
@@ -194,25 +236,12 @@ renderGrid = function() {
   // Coverage strip (Scheduler UX #1) — per-day/per-service forecast coverage,
   // reusing forecastOf/harmonyOf/scopeServices (same source as the footer). Only
   // shown when a forecast exists in the current view, so teams that don't use
-  // forecast keep a clean board. Re-rendered on every renderGrid() (cell change).
-  (function(){
-    if(typeof scopeServices!=='function'||typeof forecastOf!=='function'||typeof harmonyOf!=='function')return;
-    var covS=scopeServices().filter(function(s){return !s.minOf;});
-    if(!covS.some(function(s){return visDays.some(function(d){return forecastOf(s,d)>0;});}))return;
-    var col=function(p,f){return f>0?(p<f?'var(--bad)':'var(--ok)'):'var(--muted)';};
-    html+='<div class="board-thead cov-strip cov-strip-tot" style="grid-template-columns:'+colT+'">'+
-      '<div class="col-emp-h" style="font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700">Copertura</div>';
-    visDays.forEach(function(d){var p=0,f=0;covS.forEach(function(s){p+=harmonyOf(s,d,all);f+=forecastOf(s,d);});var cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.62rem;font-weight:600;color:'+col(p,f)+'" title="Copertura '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+p+'/'+f+'</div>';});
-    html+='<div class="col-tot-h"></div></div>';
-    covS.forEach(function(s){
-      if(!visDays.some(function(d){return forecastOf(s,d)>0;}))return;
-      var lab=esc(s.label||s.key);
-      html+='<div class="board-thead cov-strip" style="grid-template-columns:'+colT+'">'+
-        '<div class="col-emp-h" style="font-size:.58rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+lab+'">'+lab+'</div>';
-      visDays.forEach(function(d){var p=harmonyOf(s,d,all),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.58rem;color:'+col(p,f)+'" title="'+lab+' '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+((f>0||p>0)?p+'/'+f:'')+'</div>';});
-      html+='<div class="col-tot-h"></div></div>';
-    });
-  })();
+  // forecast keep a clean board. Built by covStripHTML so refreshCovStrip can
+  // rebuild the same rows live during bulk paint (#3); layout context is stashed
+  // for that live path (paint doesn't change day/today/wk-sep classes or colT).
+  window._covCtx={visDays:visDays,colT:colT,dayCls:dayCls};
+  var _covH=covStripHTML(visDays,colT,all,dayCls);
+  if(_covH)html+=_covH;
   if(!drivers.length){
     _vTeardown();
     var biE=document.getElementById('boardInner');biE.classList.remove('v-on');
