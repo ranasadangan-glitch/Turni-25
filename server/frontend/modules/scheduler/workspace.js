@@ -119,6 +119,11 @@
   // Single-click dispatcher used by every board cell. In paint mode it stamps
   // the brush code; otherwise it opens the compact popover.
   window.cellClick = function (ev, id, d) {
+    // Shift+click extends a rectangular selection from the anchor (spreadsheet
+    // style). Works in any mode; it neither paints nor opens the popover (#3).
+    if (ev && ev.shiftKey) { if (ev.preventDefault) ev.preventDefault(); _selectRangeTo(id, d); return; }
+    // A plain click sets the selection anchor and drops any prior range.
+    _setAnchor(id, d);
     if (_brush !== null) {
       if (typeof pushUndo === 'function') pushUndo(JSON.parse(JSON.stringify(state.schedule)));
       commitCell(id, d, _brush);
@@ -160,6 +165,102 @@
     if (typeof markCellWarn === 'function') { try { markCellWarn(id, d); } catch (e) {} }   // keep inline rule warnings live under paint
     if (typeof markCellEdit === 'function') { try { markCellEdit(id, d); } catch (e) {} }   // keep per-cell edit/unsaved marker live under paint (#5)
   }
+
+  // ── Range select + bulk fill / clear / repeat-week (#3) ────────────
+  // Rectangular selection over the grid (drivers × visible days). All bulk
+  // actions go through the existing commitCell + _paintCellDom write path, so
+  // contract/absence coercions and the coalesced footer recompute still apply —
+  // no new model, no DB/engine change.
+  var _selAnchor = null;   // {id,d} last plain-clicked cell (rectangle corner)
+  var _selCells = [];      // current rectangular selection [{id,d}, …]
+
+  function _gridOrder() {
+    var ids = (typeof gridDrivers !== 'undefined' ? gridDrivers : []).map(function (x) { return x.id; });
+    var days = (typeof gridDays !== 'undefined' ? gridDays : []).slice();
+    return { ids: ids, days: days };
+  }
+  function _setAnchor(id, d) { _selAnchor = { id: id, d: d }; _clearRange(); }
+  function _clearRange() {
+    _selCells.forEach(function (c) {
+      var td = document.getElementById('c_' + c.id + '_' + c.d);
+      if (td) td.classList.remove('sel-range');
+    });
+    _selCells = [];
+    _updateRangeChip();
+  }
+  function _selectRangeTo(id, d) {
+    var g = _gridOrder();
+    if (!_selAnchor) _selAnchor = { id: id, d: d };
+    var r0 = g.ids.indexOf(_selAnchor.id), r1 = g.ids.indexOf(id);
+    var c0 = g.days.indexOf(_selAnchor.d), c1 = g.days.indexOf(d);
+    if (r0 < 0 || r1 < 0 || c0 < 0 || c1 < 0) { _selAnchor = { id: id, d: d }; return; }
+    if (r0 > r1) { var t = r0; r0 = r1; r1 = t; }
+    if (c0 > c1) { var u = c0; c0 = c1; c1 = u; }
+    _clearRange();
+    for (var r = r0; r <= r1; r++) for (var c = c0; c <= c1; c++) {
+      var cid = g.ids[r], cd = g.days[c];
+      _selCells.push({ id: cid, d: cd });
+      var td = document.getElementById('c_' + cid + '_' + cd);
+      if (td) td.classList.add('sel-range');
+    }
+    _updateRangeChip();
+  }
+  // Selection cells that are still valid on the current render (guards against a
+  // stale selection after a week/filter change re-rendered the board).
+  function _liveSel() {
+    var g = _gridOrder();
+    return _selCells.filter(function (c) {
+      return g.ids.indexOf(c.id) >= 0 && g.days.indexOf(c.d) >= 0 && document.getElementById('c_' + c.id + '_' + c.d);
+    });
+  }
+  function _updateRangeChip() {
+    var rt = document.getElementById('rangeTools');
+    if (!rt) return;
+    if (_selCells.length > 1) {
+      rt.style.display = 'inline-flex';
+      var c = rt.querySelector('.rt-count'); if (c) c.textContent = _selCells.length + ' celle';
+    } else rt.style.display = 'none';
+  }
+
+  window.schedFillRange = function () {
+    var sel = _liveSel();
+    if (sel.length < 1) { toast('Seleziona un intervallo (Shift+clic su due celle)'); return; }
+    if (_brush === null) { toast('Scegli prima un pennello (clic destro su un codice)'); return; }
+    if (typeof pushUndo === 'function') pushUndo(JSON.parse(JSON.stringify(state.schedule)));
+    sel.forEach(function (c) { commitCell(c.id, c.d, _brush); _paintCellDom(c.id, c.d); });
+    toast('Riempite ' + sel.length + ' celle con ' + (_brush || 'Vuoto'));
+  };
+  window.schedClearRange = function () {
+    var sel = _liveSel();
+    if (sel.length < 1) { toast('Seleziona un intervallo (Shift+clic su due celle)'); return; }
+    if (typeof pushUndo === 'function') pushUndo(JSON.parse(JSON.stringify(state.schedule)));
+    sel.forEach(function (c) { commitCell(c.id, c.d, ''); _paintCellDom(c.id, c.d); });
+    toast('Svuotate ' + sel.length + ' celle');
+  };
+  window.schedClearSelection = function () { _clearRange(); _selAnchor = null; };
+
+  // Repeat previous week: copy each visible driver's previous-week codes onto the
+  // current week, matched by weekday. Week view only. Reuses commitCell so all
+  // contract/absence coercions still apply — no engine/DB change.
+  window.schedRepeatPrevWeek = function () {
+    if (typeof planMode !== 'undefined' && planMode !== 'week') { toast('Disponibile solo in vista Settimana'); return; }
+    var weeks = (typeof monthWeeks === 'function') ? monthWeeks() : [];
+    if (!(weekIdx > 0) || !weeks[weekIdx] || !weeks[weekIdx - 1]) { toast('Nessuna settimana precedente da copiare'); return; }
+    var cur = weeks[weekIdx].days, prev = weeks[weekIdx - 1].days;
+    var byDow = {};
+    prev.forEach(function (pd) { byDow[dow(YM, pd)] = pd; });
+    var drivers = (typeof gridDrivers !== 'undefined' && gridDrivers.length) ? gridDrivers : scopedActive();
+    if (typeof pushUndo === 'function') pushUndo(JSON.parse(JSON.stringify(state.schedule)));
+    drivers.forEach(function (dr) {
+      cur.forEach(function (cd) {
+        var pd = byDow[dow(YM, cd)];
+        if (pd == null) return;
+        commitCell(dr.id, cd, getCode(dr.id, pd) || '');
+        _paintCellDom(dr.id, cd);
+      });
+    });
+    toast('Settimana precedente copiata su ' + drivers.length + ' DAS');
+  };
 
   // ── Compact assignment popover ─────────────────────────────────────
   window.cellPop = function (ev, id, d) {
@@ -229,6 +330,7 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (document.getElementById('cellPop')) { closeCellPop(); return; }
+      if (_selCells.length) { _clearRange(); _selAnchor = null; return; }
       if (_brush !== null) { clearBrush(); toast('Pennello disattivato'); }
     }
   });

@@ -235,6 +235,10 @@
 .shift-card:hover { transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,.16); }
 .shift-card[draggable=true] { cursor: grab; }
 .shift-cell.drag-over { outline: 2.5px solid var(--brand); outline-offset: -2px; background: var(--brand-lt); }
+/* Rectangular range selection + bulk fill/clear toolbar (Scheduler UX #3) */
+.shift-cell.sel-range { outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-lt); }
+.range-tools { display: none; align-items: center; gap: 6px; }
+.range-tools .rt-count { font-size: .72rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .shift-cell.copy-over { outline: 2.5px solid var(--ok);    outline-offset: -2px; background: var(--ok-bg); }
 .shift-card.dragging  { opacity: .4; }
 /* Per-cell "last edited by/when" + unsaved marker (Scheduler UX #5) */

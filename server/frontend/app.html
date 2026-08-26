@@ -356,6 +356,12 @@
           </div>
           <div class="t-divider"></div>
           <span id="brushChip" class="brush-chip" style="display:none">🖌 <span class="bc-code"></span><button onclick="clearBrush()" title="Esci dal pennello (ESC)">✕</button></span>
+          <span id="rangeTools" class="range-tools">
+            <span class="rt-count"></span>
+            <button class="header-btn" onclick="schedFillRange()" title="Riempi la selezione con il pennello">▦ Riempi</button>
+            <button class="header-btn" onclick="schedClearRange()" title="Svuota la selezione">␡ Svuota</button>
+          </span>
+          <button class="header-btn" id="repeatWeekBtn" onclick="schedRepeatPrevWeek()" title="Copia la settimana precedente su quella corrente (Shift+clic per selezionare intervalli)">⟲ Ripeti sett.</button>
           <div class="app-header-spacer"></div>
           <!-- Frequent, always-visible: filters toggle + the "More" menu.
                Advanced/occasional actions live inside More (their ids/handlers
