@@ -128,6 +128,22 @@
     cellPop(ev, id, d);
   };
 
+  // Bulk-entry optimization (#3): the global footer recompute (refreshBottomBar
+  // — all drivers × services × days, plus the forecast/ops footers) is the
+  // paint-path bottleneck. Coalesce it to ONE run per animation frame so a burst
+  // of stamps pays it once instead of per cell, and the cell chip repaints
+  // without waiting behind it. Always trailing, so the footer stays correct.
+  var _barPending = false;
+  var _raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); };
+  function _bottomBarSoon() {
+    if (_barPending) return;
+    _barPending = true;
+    _raf(function () {
+      _barPending = false;
+      if (typeof refreshBottomBar === 'function') { try { refreshBottomBar(); } catch (e) {} }
+    });
+  }
+
   // Repaint just one cell's chip so paint mode stays snappy (no full re-render).
   function _paintCellDom(id, d) {
     var td = document.getElementById('c_' + id + '_' + d);
@@ -139,7 +155,7 @@
     // Live recalculation (spec §15/§19): the SEM total for this row and the
     // footer KPIs must update on every single-cell change without a re-render.
     if (typeof updateRowTotal === 'function') { try { updateRowTotal(id); } catch (e) {} }
-    if (typeof refreshBottomBar === 'function') { try { refreshBottomBar(); } catch (e) {} }
+    _bottomBarSoon();   // coalesced global footer recompute (bulk-entry #3)
     if (typeof markCellWarn === 'function') { try { markCellWarn(id, d); } catch (e) {} }   // keep inline rule warnings live under paint
   }
 
