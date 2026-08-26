@@ -26,11 +26,15 @@ window.closeCellPop=function(){};window.spOpenPanel=function(){};
 var RENDER_CALLS=0,BAR_CALLS=0;
 window.refreshBottomBar=function(){BAR_CALLS++;};
 window.commitCell=function(id,d,code){if(!state.schedule[id])state.schedule[id]={};if(code)state.schedule[id][d]=code;else delete state.schedule[id][d];return true;};
-// forecast present (f=2) so the strip renders; planned p = drivers working that day
-window.scopeServices=function(){return [{key:'S1',label:'Svc1',minOf:false}];};
+// forecast present (f=2) so the strip renders; planned p = drivers whose code is
+// in the service's count list. Real primitives (dayCodes/cnt) so the memoized
+// covStripHTML path is exercised as in the app; harmonyOf kept for its guard.
+window.scopeServices=function(){return [{key:'S1',label:'Svc1',minOf:false,count:['X']}];};
 window.scopedActive=function(){return state.drivers;};
 window.forecastOf=function(s,d){return 2;};
-window.harmonyOf=function(s,d,all){return (all||[]).filter(function(dr){var c=(state.schedule[dr.id]||{})[d];return c&&c!=='OFF';}).length;};
+window.dayCodes=function(d,drivers){return (drivers||[]).map(function(dr){return (state.schedule[dr.id]||{})[d];});};
+window.cnt=function(codes,list){var n=0;for(var i=0;i<codes.length;i++){if((list||[]).indexOf(codes[i])>=0)n++;}return n;};
+window.harmonyOf=function(s,d,all){return cnt(dayCodes(d,all),s.count||[]);};
 // harmless stubs for globals board.js/workspace.js may touch at load (not on the tested path)
 window.daysInMonth=function(){return 30;};
 window.monthWeeks=function(){return [{week:1,days:[3,4]}];};

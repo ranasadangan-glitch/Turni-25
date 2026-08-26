@@ -68,18 +68,25 @@ function refreshBottomBar(){
   if(typeof state==='undefined'||!state)return;
   var visDays=(typeof gridDays!=='undefined'&&gridDays.length)?gridDays:[];
   var refDay=gridRefDay,all=scopedActive();
-  var kPres=0,kAbs=0,kOff=0,kViols=0;
+  var kPres=0,kAbs=0,kOff=0,viols=[];
+  // Perf: compute each driver's violation ONCE here and keep the list, so the
+  // banner below reuses it instead of a second all.filter(driverHasViolation)
+  // full-month rescan (bottleneck #2). Same drivers, same order as filter().
   all.forEach(function(dr){
     var c=getCode(dr.id,refDay);
     if(c){var cls=codeCls(c);if(c.toUpperCase()==='OFF')kOff++;else if(cls==='mal')kAbs++;else kPres++;}
-    if(driverHasViolation(dr))kViols++;
+    if(driverHasViolation(dr))viols.push(dr);
   });
+  var kViols=viols.length;
   var svs=scopeServices();
   var selSvc=(document.getElementById('fService')||{}).value||'';
   var selCode=selSvc&&typeof defCode==='function'?defCode(selSvc):'';
   var fcSvcs=selSvc?svs.filter(function(s){return (s.count||[]).indexOf(selCode)>=0;}):svs;
   var fcT=0,plT=0;
-  fcSvcs.forEach(function(s){visDays.forEach(function(d){fcT+=forecastOf(s,d);plT+=cnt(dayCodes(d,all),s.count);});});
+  // Perf: build dayCodes(d,all) once per day and reuse it across every service,
+  // instead of rebuilding the full driver array per (service, day) (bottleneck #1).
+  var _dc={},_dayCodes=function(d){return _dc[d]||(_dc[d]=dayCodes(d,all));};
+  fcSvcs.forEach(function(s){visDays.forEach(function(d){fcT+=forecastOf(s,d);plT+=cnt(_dayCodes(d),s.count);});});
   var delta=plT-fcT;
   function setEl(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
   setEl('kpiDrivers',all.length);setEl('kpiPresent',kPres);setEl('kpiAbsent',kAbs);
@@ -90,7 +97,7 @@ function refreshBottomBar(){
   if(dTile){dTile.classList.remove('ok','bad','warn');dTile.classList.add(delta<0?'bad':(delta>0?'ok':'warn'));}
   setEl('kpiViol',kViols);setEl('kpiSyncBar',(typeof DB_SYNC!=='undefined'&&DB_SYNC)?'🟢 DB':'🟡 locale');
   setEl('statDrivers',all.length);setEl('statPresent',kPres);setEl('statAbsent',kAbs);setEl('statOff',kOff);
-  var viols=all.filter(driverHasViolation),vb=document.getElementById('violBanner');
+  var vb=document.getElementById('violBanner');   // `viols` computed once above (bottleneck #2)
   if(vb){if(viols.length){vb.style.display='block';vb.innerHTML='<b>⚠️ Attenzione riposi:</b> '+viols.length+' DAS con 7+ giorni consecutivi: '+viols.slice(0,5).map(function(d){return esc(d.cognome);}).join(', ')+(viols.length>5?'…':'')+'.';} else vb.style.display='none';}
   if(typeof renderOpsKPI==='function'){try{renderOpsKPI();}catch(e){}}
   if(typeof renderForecastDeltaFooter==='function'){try{renderForecastDeltaFooter();}catch(e){}}
@@ -115,16 +122,21 @@ function covStripHTML(visDays,colT,all,dayCls){
   var covS=scopeServices().filter(function(s){return !s.minOf;});
   if(!covS.some(function(s){return visDays.some(function(d){return forecastOf(s,d)>0;});}))return '';
   var col=function(p,f){return f>0?(p<f?'var(--bad)':'var(--ok)'):'var(--muted)';};
+  // Perf: build dayCodes(d,all) once per day and reuse it across the total row
+  // and every per-service row (bottleneck #1). _harm(s,d) is identical to
+  // harmonyOf(s,d,all) = cnt(dayCodes(d,all), s.count||[]), just memoized per day.
+  var _dc={},_dayCodes=function(d){return _dc[d]||(_dc[d]=dayCodes(d,all));};
+  var _harm=function(s,d){return cnt(_dayCodes(d),s.count||[]);};
   var html='<div class="board-thead cov-strip cov-strip-tot" style="grid-template-columns:'+colT+'">'+
     '<div class="col-emp-h" style="font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700">Copertura</div>';
-  visDays.forEach(function(d){var p=0,f=0;covS.forEach(function(s){p+=harmonyOf(s,d,all);f+=forecastOf(s,d);});var cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.62rem;font-weight:600;color:'+col(p,f)+'" title="Copertura '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+p+'/'+f+'</div>';});
+  visDays.forEach(function(d){var p=0,f=0;covS.forEach(function(s){p+=_harm(s,d);f+=forecastOf(s,d);});var cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.62rem;font-weight:600;color:'+col(p,f)+'" title="Copertura '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+p+'/'+f+'</div>';});
   html+='<div class="col-tot-h"></div></div>';
   covS.forEach(function(s){
     if(!visDays.some(function(d){return forecastOf(s,d)>0;}))return;
     var lab=esc(s.label||s.key);
     html+='<div class="board-thead cov-strip" style="grid-template-columns:'+colT+'">'+
       '<div class="col-emp-h" style="font-size:.58rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+lab+'">'+lab+'</div>';
-    visDays.forEach(function(d){var p=harmonyOf(s,d,all),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.58rem;color:'+col(p,f)+'" title="'+lab+' '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+((f>0||p>0)?p+'/'+f:'')+'</div>';});
+    visDays.forEach(function(d){var p=_harm(s,d),f=forecastOf(s,d),cov=f>0?Math.round(p/f*100):(p?100:0);html+='<div class="'+dayCls(d)+'" style="font-size:.58rem;color:'+col(p,f)+'" title="'+lab+' '+fmtDM(YM,d)+': pianificati '+p+' / forecast '+f+' · '+cov+'%">'+((f>0||p>0)?p+'/'+f:'')+'</div>';});
     html+='<div class="col-tot-h"></div></div>';
   });
   return html;
