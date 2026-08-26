@@ -720,8 +720,13 @@ router.get('/month', async (req, res) => {
             AND (e.contract_start_date IS NULL OR e.contract_start_date <  ($2::date + interval '1 month'))
           ORDER BY e.last_name, e.first_name`, [branch, month]),
       pool.query(
-        `SELECT employee_id, local_driver_id, day_of_month, shift_code, updated_by, updated_at
-           FROM schedule_entries WHERE schedule_month=$1 AND ($2='' OR branch_code=$2)`, [month, branch]),
+        // updated_by holds the login username; resolve it to the human-readable
+        // users.full_name so the per-cell tooltip never exposes raw logins.
+        `SELECT se.employee_id, se.local_driver_id, se.day_of_month, se.shift_code,
+                se.updated_by, se.updated_at, u.full_name AS updated_by_name
+           FROM schedule_entries se
+           LEFT JOIN users u ON u.username = se.updated_by
+          WHERE se.schedule_month=$1 AND ($2='' OR se.branch_code=$2)`, [month, branch]),
       pool.query(
         `SELECT service_key, day_of_month, qty
            FROM schedule_forecasts WHERE schedule_month=$1 AND ($2='' OR branch_code=$2)`, [month, branch]),
@@ -734,6 +739,8 @@ router.get('/month', async (req, res) => {
     // Persisted per-cell attribution (#5): last human editor + time, keyed the
     // same way as scheduleMap. Engine-generated cells (updated_by='auto-engine')
     // are excluded so only manual edits/overrides carry a marker after reload.
+    // `by` is the human-readable full name (never the raw login); when a user has
+    // no full_name recorded it falls back to a neutral label instead of the login.
     const scheduleMeta = {};
     for (const r of entries.rows) {
       const did = r.employee_id || r.local_driver_id;
@@ -741,7 +748,7 @@ router.get('/month', async (req, res) => {
       scheduleMap[did][r.day_of_month] = r.shift_code;
       if (r.updated_by && r.updated_by !== 'auto-engine') {
         if (!scheduleMeta[did]) scheduleMeta[did] = {};
-        scheduleMeta[did][r.day_of_month] = { by: r.updated_by, at: r.updated_at };
+        scheduleMeta[did][r.day_of_month] = { by: r.updated_by_name || 'Utente', at: r.updated_at };
       }
     }
     const forecastMap = {};
