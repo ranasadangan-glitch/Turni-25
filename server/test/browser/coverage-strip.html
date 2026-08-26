@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<div id="boardOuter"><div id="boardInner"></div></div>
+<pre id="out"></pre>
+<script>window.onerror=function(m,s,l){var o=document.getElementById("out");if(o&&o.textContent.indexOf("RESULT_START")<0)o.textContent="JSERROR: "+m+" @"+l;return true;};</script>
+<script>
+// Controllable rAF — MUST be installed before workspace.js loads, because its
+// _bottomBarSoon captures window.requestAnimationFrame at IIFE load time.
+var _rafQ=[];
+window.requestAnimationFrame=function(cb){_rafQ.push(cb);return _rafQ.length;};
+function flushFrame(){var q=_rafQ;_rafQ=[];q.forEach(function(cb){try{cb(0);}catch(e){}});}
+// ---- stubs: only what the paint path + covStripHTML/refreshCovStrip reach ----
+window.YM="2026-06";
+window.state={schedule:{},drivers:[{id:2,cognome:'A',nome:'a'},{id:5,cognome:'B',nome:'b'}]};
+window.getCode=function(id,d){return (state.schedule[id]||{})[d];};
+window.codeCls=function(c){return c==='OFF'?'off':'next';};
+window.getCLS=function(){return {bg:'#eee',fg:'#333',br:'#ccc'};};
+window.esc=function(s){return String(s==null?'':s);};
+window.codeLabel=function(c){return c;};
+window.fmtDM=function(y,d){return d+'/06';};
+window.updateRowTotal=function(){};
+window.pushUndo=function(){};window.toast=function(){};
+window.markCellWarn=function(){};window.markCellEdit=function(){};
+window.renderGrid=function(){RENDER_CALLS++;};
+window.closeCellPop=function(){};window.spOpenPanel=function(){};
+var RENDER_CALLS=0,BAR_CALLS=0;
+window.refreshBottomBar=function(){BAR_CALLS++;};
+window.commitCell=function(id,d,code){if(!state.schedule[id])state.schedule[id]={};if(code)state.schedule[id][d]=code;else delete state.schedule[id][d];return true;};
+// forecast present (f=2) so the strip renders; planned p = drivers working that day
+window.scopeServices=function(){return [{key:'S1',label:'Svc1',minOf:false}];};
+window.scopedActive=function(){return state.drivers;};
+window.forecastOf=function(s,d){return 2;};
+window.harmonyOf=function(s,d,all){return (all||[]).filter(function(dr){var c=(state.schedule[dr.id]||{})[d];return c&&c!=='OFF';}).length;};
+// harmless stubs for globals board.js/workspace.js may touch at load (not on the tested path)
+window.daysInMonth=function(){return 30;};
+window.monthWeeks=function(){return [{week:1,days:[3,4]}];};
+window.dowName=function(){return 'MER';};
+window.sunWeek=function(){return {start:'w1',label:'1'};};
+window.filteredDrivers=function(){return state.drivers;};
+window.buildGroups=function(){return [];};
+window.consecutiveFlag=function(){return {};};
+window.workedDays=function(){return 0;};
+</script>
+<script src="BOARD_JS"></script>
+<script src="WS_JS"></script>
+<script>
+renderGrid=function(){RENDER_CALLS++;};       // board.js overwrote the stub at load — re-stub the counting no-op
+refreshBottomBar=function(){BAR_CALLS++;};     // board.js defines the real one; re-stub the counter for this unit test
+var res=[];
+var visDays=[3,4], colT='205px repeat(2,50px) 38px', dayCls=function(d){return 'col-day-h';};
+// Simulate what renderGrid does for the strip: build it + stash layout context.
+var bi=document.getElementById('boardInner');
+bi.innerHTML=covStripHTML(visDays,colT,scopedActive(),dayCls)+
+  '<div id="c_2_3" class="shift-cell"></div><div id="c_5_3" class="shift-cell"></div><div id="c_2_4" class="shift-cell"></div>';
+window._covCtx={visDays:visDays,colT:colT,dayCls:dayCls};
+function totCells(){return document.querySelector('.cov-strip-tot').children;}  // [emp,d3,d4,tot]
+res.push('strip present initially: '+(!!document.querySelector('.cov-strip-tot')));
+res.push('day-3 starts 0/2: '+(totCells()[1].textContent==='0/2'));
+// spy refreshCovStrip (real) to count coalesced calls
+var COV_CALLS=0,_realCov=window.refreshCovStrip;
+window.refreshCovStrip=function(){COV_CALLS++;return _realCov.apply(this,arguments);};
+// rapid multi-cell paint: two stamps on day 3 in one turn (bulk case)
+setBrush('X');
+cellClick({},2,3);
+cellClick({},5,3);
+res.push('both cells committed to state: '+(getCode(2,3)==='X'&&getCode(5,3)==='X'));
+res.push('strip NOT yet refreshed pre-frame (still 0/2): '+(totCells()[1].textContent==='0/2'));
+res.push('exactly one frame queued for the burst: '+(_rafQ.length===1));
+res.push('no full renderGrid triggered by paint: '+(RENDER_CALLS===0));
+flushFrame();   // the coalesced frame runs → footer + coverage strip once
+res.push('refreshCovStrip called once (coalesced): '+(COV_CALLS===1));
+res.push('refreshBottomBar called once (coalesced): '+(BAR_CALLS===1));
+res.push('day-3 now 2/2 after frame: '+(totCells()[1].textContent==='2/2'));
+res.push('day-4 untouched (0/2): '+(totCells()[2].textContent==='0/2'));
+res.push('strip still a single tot row (no duplication): '+(document.querySelectorAll('.cov-strip-tot').length===1));
+// paint again after the frame → coalescer re-arms
+cellClick({},2,4);   // day 4 now has 1 worker
+res.push('re-armed: one frame queued after later paint: '+(_rafQ.length===1));
+flushFrame();
+res.push('day-4 now 1/2: '+(totCells()[2].textContent==='1/2'));
+res.push('refreshCovStrip total 2 (re-armed): '+(COV_CALLS===2));
+var pass=res.every(function(r){return /: true$/.test(r);});
+res.push('RESULT: '+(pass?'ALL PASS':'FAIL'));
+document.getElementById('out').textContent='RESULT_START\n'+res.join('\n')+'\nRESULT_END';
+</script>
+</body></html>

@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<div id="boardOuter"><div id="boardInner"><div id="c_2_3" class="shift-cell"></div></div></div>
+<pre id="out"></pre>
+<script>window.onerror=function(m,s,l){var o=document.getElementById("out");if(o&&o.textContent.indexOf("RESULT_START")<0)o.textContent="JSERROR: "+m+" @"+l;return true;};</script>
+<script>
+// Controllable rAF (workspace.js captures it at load for the paint coalescer).
+var _rafQ=[];window.requestAnimationFrame=function(cb){_rafQ.push(cb);return _rafQ.length;};
+function flushFrame(){var q=_rafQ;_rafQ=[];q.forEach(function(cb){try{cb(0);}catch(e){}});}
+window.state={schedule:{},drivers:[{id:2,cognome:'Verdi',nome:'Lia',filiale:'DLO1'}]};
+window.getCode=function(id,d){return (state.schedule[id]||{})[d];};
+window.codeCls=function(c){return c==='OFF'?'off':'next';};
+window.getCLS=function(){return {bg:'#eee',fg:'#333',br:'#ccc'};};
+window.esc=function(s){return String(s==null?'':s);};
+window.codeLabel=function(c){return c;};
+window.updateRowTotal=function(){};window.refreshBottomBar=function(){};window.refreshCovStrip=function(){};
+window.pushUndo=function(){};window.toast=function(){};window.closeCellPop=function(){};window.spOpenPanel=function(){};
+window.commitCell=function(id,d,code){if(!state.schedule[id])state.schedule[id]={};if(code)state.schedule[id][d]=code;else delete state.schedule[id][d];return true;};
+// #2: warn on any working (non-OFF) code — same contract as window.cellWarnings.
+window.cellWarnings=function(dr,d){var c=getCode(dr.id,d);return (c&&c!=='OFF')?[{reason:'7+ giorni consecutivi senza riposo'}]:[];};
+// #5: a session edit note exists once the cell carries a value.
+window._cellEditNote=function(id,d){return getCode(id,d)?{by:'Tester',at:'10:00',unsaved:true}:null;};
+</script>
+<script src="BOARD_JS"></script>
+<script src="WS_JS"></script>
+<script>
+renderGrid=function(){};                        // board.js reassigns the global; neutralize the full re-render
+var res=[],cell=document.getElementById('c_2_3');
+res.push('board markers loaded (markCellWarn+markCellEdit): '+(typeof window.markCellWarn==='function'&&typeof window.markCellEdit==='function'));
+res.push('clean cell has no markers: '+(!cell.querySelector('.rw-mark')&&!cell.querySelector('.ed-mark')));
+// paint a violating working code via the REAL path: cellClick -> _paintCellDom
+setBrush('X');
+cellClick({},2,3); flushFrame();
+res.push('paint wrote chip to state+DOM: '+(getCode(2,3)==='X'&&cell.textContent.indexOf('X')>=0));
+res.push('#2 warning marker survives _paintCellDom innerHTML wipe: '+(!!cell.querySelector('.rw-mark')&&cell.classList.contains('rulewarn-sc')));
+res.push('#5 edit marker survives _paintCellDom innerHTML wipe: '+(!!cell.querySelector('.ed-mark')&&cell.classList.contains('sc-unsaved')));
+// edit to OFF: the rule warning must clear; the edit marker persists (still an edit)
+setBrush('OFF');
+cellClick({},2,3); flushFrame();
+res.push('#2 warning clears when the code no longer violates: '+(!cell.querySelector('.rw-mark')&&!cell.classList.contains('rulewarn-sc')));
+res.push('#5 edit marker persists across a further edit: '+(!!cell.querySelector('.ed-mark')));
+var pass=res.every(function(r){return /: true$/.test(r);});
+res.push('RESULT: '+(pass?'ALL PASS':'FAIL'));
+document.getElementById('out').textContent='RESULT_START\n'+res.join('\n')+'\nRESULT_END';
+</script>
+</body></html>

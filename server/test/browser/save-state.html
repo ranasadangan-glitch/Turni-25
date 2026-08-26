@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<div id="navSync"></div>
+<span class="save-pill" id="saveState"></span>
+<pre id="out"></pre>
+<script>window.onerror=function(m,s,l){var o=document.getElementById("out");if(o&&o.textContent.indexOf("RESULT_START")<0)o.textContent="JSERROR: "+m+" @"+l;return true;};</script>
+<script>window.setTimeout=function(fn){return 0;};   // no autosave debounce auto-fires: we drive the lifecycle deterministically
+window.TurniApi={isLoggedIn:function(){return true;}};</script>
+<script src="SCHED_JS"></script>
+<script src="ROUTER_JS"></script>
+<script>
+if(typeof toast!=='function')window.toast=function(){};
+if(typeof driverHasViolation!=='function')window.driverHasViolation=function(){return false;};
+if(typeof logAction!=='function')window.logAction=function(){};
+if(typeof markCellEdit!=='function')window.markCellEdit=function(){};
+window.isAdmin=function(){return true;};
+renderGrid=function(){};
+state={schedule:{},config:{codes:[{code:'X',label:'Turno'},{code:'OFF',label:'Riposo'}]},drivers:[{id:2,cognome:'Verdi',nome:'Lia',filiale:'DLO1',workDays:[1,2,3,4,5],expiry:null}]};
+var pill=function(){return document.getElementById('saveState').textContent;};
+var res=[];
+// 1) first edit → explicit unsaved COUNT
+commitCell(2,3,'X');
+res.push('1 unsaved shows count: '+(/1 modifica non salvata/.test(pill()) && pill().charAt(0)==='●'));
+// 2) second edit → count increments + pluralises
+commitCell(2,4,'X');
+res.push('2 unsaved shows plural count: '+(/2 modifiche non salvate/.test(pill())));
+// 3) autosave "queued" state must NOT stomp the count (the bug this fixes)
+setSaveState('queued');
+res.push('queued keeps the count (not "in coda"): '+(/2 modifiche non salvate/.test(pill()) && pill().indexOf('in coda')<0));
+res.push('pending count API agrees: '+(_schedPendingCount()===2));
+// 4) save completes → LAST SAVED time, count cleared
+_schedMarkSaved();
+res.push('saved shows "Tutto salvato" + time: '+(/^✓ Tutto salvato · \d{2}:\d{2}$/.test(pill())));
+res.push('unsaved cleared after save: '+(_schedPendingCount()===0));
+var savedTxt=pill();
+// 5) edit after save → count returns AND last-saved time is still shown
+commitCell(2,5,'X');
+res.push('edit-after-save shows count + last saved time: '+(/1 modifica non salvata/.test(pill()) && /ultimo salv\. \d{2}:\d{2}/.test(pill())));
+// 6) a save failure must not leave the pill stuck on the in-flight spinner
+setSaveState('saving'); window._schedSaving=false; window._schedRenderSave();
+res.push('in-flight flag recoverable (no stuck ⏳ when not saving): '+(pill().charAt(0)==='●'));
+var pass=res.every(function(r){return /: true$/.test(r);});
+res.push('RESULT: '+(pass?'ALL PASS':'FAIL'));
+document.getElementById('out').textContent='RESULT_START\n'+res.join('\n')+'\nRESULT_END';
+</script>
+</body></html>

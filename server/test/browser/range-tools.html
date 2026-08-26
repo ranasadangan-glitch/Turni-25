@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<span id="rangeTools" class="range-tools"><span class="rt-count"></span></span>
+<div id="boardOuter"><div id="boardInner"></div></div>
+<pre id="out"></pre>
+<script>window.onerror=function(m,s,l){var o=document.getElementById("out");if(o&&o.textContent.indexOf("RESULT_START")<0)o.textContent="JSERROR: "+m+" @"+l;return true;};</script>
+<script>
+window.requestAnimationFrame=function(cb){return 0;};   // footer recompute deferred; not needed for these assertions
+window.YM="2026-06";
+window.state={schedule:{},drivers:[{id:2,cognome:'A',nome:'a'},{id:5,cognome:'B',nome:'b'}]};
+window.gridDrivers=[{id:2},{id:5}]; window.gridDays=[3,4];
+window.getCode=function(id,d){return (state.schedule[id]||{})[d];};
+window.codeCls=function(c){return c==='OFF'?'off':'next';};
+window.getCLS=function(){return {bg:'#eee',fg:'#333',br:'#ccc'};};
+window.esc=function(s){return String(s==null?'':s);};
+window.codeLabel=function(c){return c;};
+window.updateRowTotal=function(){};window.refreshBottomBar=function(){};window.refreshCovStrip=function(){};
+window.markCellWarn=function(){};window.markCellEdit=function(){};
+window.toast=function(){};window.pushUndo=function(){PUSH++;};window.scopedActive=function(){return state.drivers;};
+window.commitCell=function(id,d,code){if(!state.schedule[id])state.schedule[id]={};if(code)state.schedule[id][d]=code;else delete state.schedule[id][d];return true;};
+var PUSH=0;
+function mkCells(ids,days){var bi=document.getElementById('boardInner');bi.innerHTML='';ids.forEach(function(id){days.forEach(function(d){var el=document.createElement('div');el.id='c_'+id+'_'+d;el.className='shift-cell';bi.appendChild(el);});});}
+</script>
+<script src="BOARD_JS"></script>
+<script src="WS_JS"></script>
+<script>
+renderGrid=function(){};
+var res=[];
+// ── Phase A: range select → fill → clear ──────────────────────────
+mkCells([2,5],[3,4]);
+setBrush('A');
+cellClick({}, 2, 3);                       // plain click → paints anchor, sets _selAnchor=(2,3)
+cellClick({shiftKey:true}, 5, 4);          // shift-click far corner → rectangle (2,5)x(3,4)
+var selEls=document.querySelectorAll('.shift-cell.sel-range');
+res.push('rectangular selection = 4 cells: '+(selEls.length===4));
+res.push('rangeTools shown with count: '+(document.getElementById('rangeTools').style.display==='inline-flex' && /4 celle/.test(document.querySelector('.rt-count').textContent)));
+setBrush('X');
+schedFillRange();
+res.push('FILL set all 4 cells to X (state): '+([[2,3],[2,4],[5,3],[5,4]].every(function(p){return getCode(p[0],p[1])==='X';})));
+res.push('FILL painted chip into DOM: '+(document.getElementById('c_5_4').textContent.indexOf('X')>=0));
+res.push('FILL used ONE undo snapshot: '+(PUSH===2));   // 1 from anchor paint + 1 from fill
+schedClearRange();
+res.push('CLEAR emptied all 4 cells (state): '+([[2,3],[2,4],[5,3],[5,4]].every(function(p){return !getCode(p[0],p[1]);})));
+res.push('CLEAR emptied chip in DOM: '+(document.getElementById('c_5_4').textContent===''));
+// selection with only the anchor (no shift) must not enable bulk tools
+cellClick({}, 2, 3);
+res.push('single click does not open range tools: '+(document.getElementById('rangeTools').style.display!=='inline-flex'));
+
+// ── Phase B: repeat previous week ─────────────────────────────────
+window.monthWeeks=function(){return [{week:1,days:[1,2]},{week:2,days:[8,9]}];};
+window.dow=function(m,d){return (d-1)%7;};   // day1↔day8 (wd0), day2↔day9 (wd1)
+window.weekIdx=1; window.planMode='week';
+window.gridDrivers=[{id:2}]; window.gridDays=[8,9];
+state.schedule={2:{1:'R1',2:'OFF'}};          // previous-week codes only
+mkCells([2],[8,9]);
+schedRepeatPrevWeek();
+res.push('REPEAT copied prev→cur by weekday (day8=R1): '+(getCode(2,8)==='R1'));
+res.push('REPEAT copied prev→cur by weekday (day9=OFF): '+(getCode(2,9)==='OFF'));
+res.push('REPEAT left previous week intact (day1=R1): '+(getCode(2,1)==='R1'));
+res.push('REPEAT painted current-week chips: '+(document.getElementById('c_2_8').textContent.indexOf('R1')>=0));
+// guard: repeat in month mode is refused
+window.planMode='month'; var before=getCode(2,8); state.schedule[2][8]='ZZ';
+schedRepeatPrevWeek();
+res.push('REPEAT refused outside week view (no overwrite): '+(getCode(2,8)==='ZZ'));
+
+var pass=res.every(function(r){return /: true$/.test(r);});
+res.push('RESULT: '+(pass?'ALL PASS':'FAIL'));
+document.getElementById('out').textContent='RESULT_START\n'+res.join('\n')+'\nRESULT_END';
+</script>
+</body></html>

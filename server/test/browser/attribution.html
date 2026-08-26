@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<span class="save-pill" id="saveState"></span>
+<pre id="out"></pre>
+<script>window.onerror=function(m,s,l){var o=document.getElementById("out");if(o&&o.textContent.indexOf("RESULT_START")<0)o.textContent="JSERROR: "+m+" @"+l;return true;};</script>
+<script>window.TurniApi={isLoggedIn:function(){return false;}};</script>
+<script src="SCHED_JS"></script>
+<script>
+// externals commitCell()/actorName() reach that live outside scheduler.js
+if(typeof toast!=='function')window.toast=function(){};
+if(typeof driverHasViolation!=='function')window.driverHasViolation=function(){return false;};
+if(typeof logAction!=='function')window.logAction=function(){};
+if(typeof markCellEdit!=='function')window.markCellEdit=function(){};
+state={schedule:{},config:{codes:[{code:'X',label:'Turno'},{code:'OFF',label:'Riposo'}]},drivers:[{id:40,cognome:'Rossi',nome:'Mario',filiale:'DLO1',workDays:[1,2,3,4,5],expiry:null}]};
+
+var res=[];
+// Simulate the DB snapshot after RELOAD: scheduleMeta → _cellMetaDB (persisted human edit)
+window._cellMetaDB={40:{26:{by:'Amministratore',at:'2026-08-26T12:12:35.572Z'}}};
+// 1) persisted attribution shows after reload (no session edit) → saved, dated
+var n=window._cellEditNote(40,26);
+res.push('persisted note present: '+(!!n));
+res.push('persisted by = full name (Amministratore): '+(!!n&&n.by==='Amministratore'));
+res.push('raw login not shown (no \'admin\'): '+(!!n&&n.by.indexOf('admin')<0));
+res.push('persisted marked SAVED (unsaved=false): '+(!!n&&n.unsaved===false));
+res.push('persisted time formatted as date+time: '+(!!n&&/\d{2}\/\d{2}.*\d{2}:\d{2}/.test(n.at)));
+// 2) a cell with neither session edit nor DB meta → null
+res.push('cell with no history → null: '+(window._cellEditNote(40,27)===null));
+// 3) session edit on the SAME cell takes precedence over DB meta, and is UNSAVED
+commitCell(40,26,'X');
+var s=window._cellEditNote(40,26);
+res.push('session edit overrides DB meta: '+(!!s&&s.unsaved===true));
+res.push('session time is HH:MM (not dated): '+(!!s&&/^\d{2}:\d{2}$/.test(s.at)));
+// 4) after successful save → same cell now SAVED (session note kept), distinct from unsaved
+_schedMarkSaved();
+var s2=window._cellEditNote(40,26);
+res.push('after save: same cell now saved (unsaved=false): '+(!!s2&&s2.unsaved===false));
+res.push('after save: still attributed (by present): '+(!!s2&&typeof s2.by==='string'&&s2.by.length>0));
+// 5) DB-meta-only cell stays saved/unaffected by the save of another cell
+var n2=window._cellEditNote(40,26);   // same cell; ensure no crash
+res.push('DB meta map still intact for reload semantics: '+(window._cellMetaDB[40][26].by==='Amministratore'));
+
+var pass=res.every(function(r){return /: true$/.test(r);});
+res.push('RESULT: '+(pass?'ALL PASS':'FAIL'));
+document.getElementById('out').textContent='RESULT_START\n'+res.join('\n')+'\nRESULT_END';
+</script>
+</body></html>
