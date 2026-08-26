@@ -13,7 +13,8 @@
 //
 //   unified_drivers  =  employees  UNION  scheduler_drivers (not yet in employees)
 //   unified_entries  =  schedules  UNION  schedule_entries  (with a resolved shift_code)
-//   unified_forecast =  forecasts  UNION  schedule_forecasts (by date)
+//   unified_forecast =  scheduler-wins reconcile of forecasts + schedule_forecasts
+//                       per (branch, service_types.code = service_key, date)
 //
 // This way the dashboard always reflects exactly what the scheduler shows.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,21 +136,32 @@ unified_entries AS (
 -- ── UNIFIED FORECAST ────────────────────────────────────────────────────────
 -- All forecast quantities for the target date
 unified_forecast AS (
-  -- From standard forecasts table (HR system)
-  SELECT COALESCE(sum(f.qty), 0)::int AS total_fc
-  FROM forecasts f
-  JOIN branches b ON b.id = f.branch_id
-  WHERE f.forecast_date = $1::date
-    ${branchCode ? `AND b.code = '${branchCode.replace(/'/g, "''")}'` : ''}
-
+  -- Scheduler-wins reconciliation: the scheduler's schedule_forecasts (keyed by
+  -- service_key) is authoritative per (branch, service, date); HR forecasts
+  -- (service_types.code) fill in only where the scheduler has no row — so a
+  -- service present in both stores is counted once, not summed.
+  WITH hr AS (
+    SELECT b.code AS bc, st.code AS svc, sum(f.qty)::int AS qty
+      FROM forecasts f
+      JOIN branches b       ON b.id  = f.branch_id
+      JOIN service_types st ON st.id = f.service_type_id
+     WHERE f.forecast_date = $1::date
+       ${branchCode ? `AND b.code = '${branchCode.replace(/'/g, "''")}'` : ''}
+     GROUP BY 1, 2
+  ),
+  sc AS (
+    SELECT sf.branch_code AS bc, sf.service_key AS svc, sum(sf.qty)::int AS qty
+      FROM schedule_forecasts sf
+     WHERE sf.schedule_month = date_trunc('month', $1::date)
+       AND sf.day_of_month   = EXTRACT(DAY FROM $1::date)::int
+       ${branchCode ? `AND sf.branch_code = '${branchCode.replace(/'/g, "''")}'` : ''}
+     GROUP BY 1, 2
+  )
+  SELECT qty AS total_fc FROM sc
   UNION ALL
-
-  -- From scheduler's schedule_forecasts table
-  SELECT COALESCE(sum(sf.qty), 0)::int AS total_fc
-  FROM schedule_forecasts sf
-  WHERE sf.schedule_month = date_trunc('month', $1::date)
-    AND sf.day_of_month   = EXTRACT(DAY FROM $1::date)::int
-    ${branchCode ? `AND sf.branch_code = '${branchCode.replace(/'/g, "''")}'` : ''}
+  SELECT hr.qty AS total_fc
+    FROM hr LEFT JOIN sc ON sc.bc = hr.bc AND sc.svc = hr.svc
+   WHERE sc.svc IS NULL
 )
 `;
 }
@@ -160,20 +172,22 @@ function buildUnifiedForecastTrend(date, branch) {
   return `
 WITH
 fc_hr AS (
-  SELECT f.forecast_date::date AS d, COALESCE(sum(f.qty),0)::int AS qty
+  SELECT b.code AS bc, st.code AS svc, f.forecast_date::date AS d, sum(f.qty)::int AS qty
   FROM forecasts f JOIN branches b ON b.id = f.branch_id
+       JOIN service_types st ON st.id = f.service_type_id
   WHERE f.forecast_date BETWEEN ($1::date - 29) AND $1::date
     ${branchCode ? `AND b.code = '${branchCode.replace(/'/g,"''")}'` : ''}
-  GROUP BY 1
+  GROUP BY 1, 2, 3
 ),
 fc_sc AS (
-  SELECT (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date AS d,
+  SELECT sf.branch_code AS bc, sf.service_key AS svc,
+         (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date AS d,
          COALESCE(sum(sf.qty),0)::int AS qty
   FROM schedule_forecasts sf
   WHERE (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date
          BETWEEN ($1::date - 29) AND $1::date
     ${branchCode ? `AND sf.branch_code = '${branchCode.replace(/'/g,"''")}'` : ''}
-  GROUP BY 1
+  GROUP BY 1, 2, 3
 ),
 pl_hr AS (
   SELECT s.work_date::date AS d, count(*)::int AS cnt
@@ -198,7 +212,15 @@ pl_sc AS (
 all_days AS (
   SELECT generate_series($1::date - 29, $1::date, '1 day'::interval)::date AS d
 ),
-fc_all AS (SELECT d, COALESCE(fc_hr.qty,0)+COALESCE(fc_sc.qty,0) AS qty FROM all_days LEFT JOIN fc_hr USING(d) LEFT JOIN fc_sc USING(d)),
+-- Scheduler-wins per (branch, service, date), then summed to a daily total.
+fc_recon AS (
+  SELECT d, qty FROM fc_sc
+  UNION ALL
+  SELECT hr.d, hr.qty FROM fc_hr hr
+    LEFT JOIN fc_sc s2 ON s2.bc = hr.bc AND s2.svc = hr.svc AND s2.d = hr.d
+   WHERE s2.svc IS NULL
+),
+fc_all AS (SELECT ad.d, COALESCE(sum(fr.qty),0)::int AS qty FROM all_days ad LEFT JOIN fc_recon fr USING(d) GROUP BY ad.d),
 pl_all AS (SELECT d, COALESCE(pl_hr.cnt,0)+COALESCE(pl_sc.cnt,0) AS cnt FROM all_days LEFT JOIN pl_hr USING(d) LEFT JOIN pl_sc USING(d))
 SELECT fa.d::text AS d, fa.qty::int AS forecast, pa.cnt::int AS planned
 FROM fc_all fa JOIN pl_all pa USING(d) ORDER BY d
@@ -444,16 +466,26 @@ router.get('/', async (req, res) => {
         GROUP BY branch_code
       ),
       forecast_by_branch AS (
-        SELECT branch_code, sum(qty)::int AS required FROM (
-          SELECT b.code AS branch_code, f.qty
+        WITH hr AS (
+          SELECT b.code AS bc, st.code AS svc, sum(f.qty)::int AS qty
             FROM forecasts f JOIN branches b ON b.id = f.branch_id
+                 JOIN service_types st ON st.id = f.service_type_id
            WHERE f.forecast_date = $1::date ${brC ? `AND b.code = ${brC}` : ''}
-          UNION ALL
-          SELECT sf.branch_code, sf.qty
+           GROUP BY 1, 2
+        ),
+        sc AS (
+          SELECT sf.branch_code AS bc, sf.service_key AS svc, sum(sf.qty)::int AS qty
             FROM schedule_forecasts sf
            WHERE sf.schedule_month = date_trunc('month', $1::date)
              AND sf.day_of_month = EXTRACT(DAY FROM $1::date)::int ${brC ? `AND sf.branch_code = ${brC}` : ''}
-        ) x GROUP BY branch_code
+           GROUP BY 1, 2
+        )
+        -- Scheduler-wins per (branch, service): HR fills gaps only.
+        SELECT bc AS branch_code, sum(qty)::int AS required FROM (
+          SELECT bc, qty FROM sc
+          UNION ALL
+          SELECT hr.bc, hr.qty FROM hr LEFT JOIN sc ON sc.bc = hr.bc AND sc.svc = hr.svc WHERE sc.svc IS NULL
+        ) x GROUP BY bc
       )
       SELECT d.branch_code,
              d.drivers,
@@ -530,20 +562,32 @@ router.get('/', async (req, res) => {
         SELECT generate_series($1::date, $1::date + 6, '1 day'::interval)::date AS d
       ),
       fc_hr AS (
-        SELECT f.forecast_date::date AS d, COALESCE(sum(f.qty),0)::int AS qty
+        SELECT b.code AS bc, st.code AS svc, f.forecast_date::date AS d, sum(f.qty)::int AS qty
           FROM forecasts f JOIN branches b ON b.id = f.branch_id
+               JOIN service_types st ON st.id = f.service_type_id
          WHERE f.forecast_date BETWEEN $1::date AND $1::date + 6
            ${brC ? `AND b.code = ${brC}` : ''}
-         GROUP BY 1
+         GROUP BY 1, 2, 3
       ),
       fc_sc AS (
-        SELECT (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date AS d,
+        SELECT sf.branch_code AS bc, sf.service_key AS svc,
+               (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date AS d,
                COALESCE(sum(sf.qty),0)::int AS qty
           FROM schedule_forecasts sf
          WHERE (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date
                BETWEEN $1::date AND $1::date + 6
            ${brC ? `AND sf.branch_code = ${brC}` : ''}
-         GROUP BY 1
+         GROUP BY 1, 2, 3
+      ),
+      -- Scheduler-wins per (branch, service, date), summed to a daily total.
+      fc_all AS (
+        SELECT d, sum(qty)::int AS qty FROM (
+          SELECT d, qty FROM fc_sc
+          UNION ALL
+          SELECT hr.d, hr.qty FROM fc_hr hr
+            LEFT JOIN fc_sc s2 ON s2.bc = hr.bc AND s2.svc = hr.svc AND s2.d = hr.d
+           WHERE s2.svc IS NULL
+        ) r GROUP BY d
       ),
       pl_hr AS (
         SELECT s.work_date::date AS d,
@@ -569,12 +613,11 @@ router.get('/', async (req, res) => {
       )
       SELECT days.d::text AS date,
              trim(to_char(days.d, 'Dy')) AS dow,
-             (COALESCE(fc_hr.qty,0) + COALESCE(fc_sc.qty,0))::int         AS forecast,
+             COALESCE(fc_all.qty,0)::int                                  AS forecast,
              (COALESCE(pl_hr.planned,0) + COALESCE(pl_sc.planned,0))::int AS planned,
              (COALESCE(pl_hr.absent,0) + COALESCE(pl_sc.absent,0))::int   AS absent
         FROM days
-        LEFT JOIN fc_hr ON fc_hr.d = days.d
-        LEFT JOIN fc_sc ON fc_sc.d = days.d
+        LEFT JOIN fc_all ON fc_all.d = days.d
         LEFT JOIN pl_hr ON pl_hr.d = days.d
         LEFT JOIN pl_sc ON pl_sc.d = days.d
        ORDER BY days.d
