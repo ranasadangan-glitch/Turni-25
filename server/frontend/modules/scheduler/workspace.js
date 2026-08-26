@@ -157,6 +157,7 @@
     if (typeof updateRowTotal === 'function') { try { updateRowTotal(id); } catch (e) {} }
     _bottomBarSoon();   // coalesced global footer recompute (bulk-entry #3)
     if (typeof markCellWarn === 'function') { try { markCellWarn(id, d); } catch (e) {} }   // keep inline rule warnings live under paint
+    if (typeof markCellEdit === 'function') { try { markCellEdit(id, d); } catch (e) {} }   // keep per-cell edit/unsaved marker live under paint (#5)
   }
 
   // ── Compact assignment popover ─────────────────────────────────────

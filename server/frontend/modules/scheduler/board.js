@@ -264,8 +264,12 @@ renderGrid = function() {
       // predicates as generation). Only working codes are checked.
       var _w=(code&&typeof cellWarnings==='function')?cellWarnings(dr,d):[];
       var _wt=_w.length?esc(_w.map(function(x){return x.reason;}).join(' · ')):'';
-      h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell'+(isT?' today-sc':'')+(isW?' wend-sc':'')+(isV?' viol-sc':'')+(_w.length?' rulewarn-sc':'')+wkSep(d)+'"'+
-        (_w.length?(' title="⚠ '+_wt+'" style="position:relative"'):'')+
+      // Per-cell "last edited by/when" + unsaved marker (Scheduler UX #5).
+      var _ed=(typeof window._cellEditNote==='function')?window._cellEditNote(dr.id,d):null;
+      var _rel=_w.length||_ed;
+      h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell'+(isT?' today-sc':'')+(isW?' wend-sc':'')+(isV?' viol-sc':'')+(_w.length?' rulewarn-sc':'')+((_ed&&_ed.unsaved)?' sc-unsaved':'')+wkSep(d)+'"'+
+        (_w.length?(' title="⚠ '+_wt+'"'):'')+
+        (_rel?' style="position:relative"':'')+
         ' onclick="cellClick(event,'+dr.id+','+d+')"'+
         ' ondblclick="spOpenPanel('+dr.id+','+d+')"'+
         ' oncontextmenu="event.shiftKey?cellPopBrush(event,\''+esc(code||'')+'\'):boardCtxOpen(event,'+dr.id+','+d+')"'+
@@ -280,6 +284,7 @@ renderGrid = function() {
           ' title="'+esc(codeLabel(code))+'">'+esc(code)+'</div>';
       }
       if(_w.length)h+='<span class="rw-mark" style="position:absolute;top:0;right:1px;font-size:9px;line-height:1;color:var(--bad);pointer-events:none;z-index:1">⚠</span>';
+      if(_ed)h+='<span class="ed-mark" title="✎ '+esc(_ed.by)+' · '+esc(_ed.at)+(_ed.unsaved?' · non salvato':'')+'">•</span>';
       h+='</div>';
     });
     h+='<div class="tot-sc">'+wTotal+'</div></div>';
@@ -403,6 +408,24 @@ function markCellWarn(id,d){
   }else if(td.title&&td.title.charAt(0)==='⚠'){ td.removeAttribute('title'); }
 }
 window.markCellWarn=markCellWarn;
+// Re-apply the per-cell edit marker (#5: who/when + unsaved) after a partial
+// (paint) update, so it stays live without a full re-render. Reads the same
+// session map the renderer uses via window._cellEditNote.
+function markCellEdit(id,d){
+  var td=document.getElementById('c_'+id+'_'+d); if(!td)return;
+  var ed=(typeof window._cellEditNote==='function')?window._cellEditNote(id,d):null;
+  var ex=td.querySelector('.ed-mark'); if(ex)ex.remove();
+  td.classList.toggle('sc-unsaved',!!(ed&&ed.unsaved));
+  if(ed){
+    td.style.position='relative';
+    var s=document.createElement('span');
+    s.className='ed-mark';
+    s.textContent='•';
+    s.title='✎ '+ed.by+' · '+ed.at+(ed.unsaved?' · non salvato':'');
+    td.appendChild(s);
+  }
+}
+window.markCellEdit=markCellEdit;
 function boardDragStart(e,id,d){_bdSrc={id,d,code:getCode(id,d)};e.dataTransfer.effectAllowed='copyMove';e.target.classList.add('dragging');}
 function boardDragEnd(){document.querySelectorAll('.shift-card.dragging').forEach(function(el){el.classList.remove('dragging');});_bdSrc=null;}
 function boardDragOver(e,cell){if(!_bdSrc)return;e.preventDefault();var copy=e.altKey||e.ctrlKey;cell.classList.toggle('drag-over',!copy);cell.classList.toggle('copy-over',copy);}

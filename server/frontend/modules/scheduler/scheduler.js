@@ -128,7 +128,7 @@ async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedule
 // Refetch the roster from the employees-backed month endpoint (spec §14) so
 // employee create/edit/delete reflect in the scheduler without a page refresh.
 window.syncSchedulerFromDB=async function(){try{if(typeof state==="undefined"||!state)return;const br=teamFiliale||(filiali()[0]||"DLO1");await loadMonthFromDB(YM,br);if(typeof refreshAll==="function")refreshAll();}catch(e){}};
-async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);const el=document.getElementById("saveState");if(el)el.textContent="DB "+new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});}catch(e){console.warn("[DB]",e.message);const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
+async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved();}catch(e){console.warn("[DB]",e.message);const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
 let saveTimer=null;
 function saveAll(manual){
   // Write to localStorage as offline cache
@@ -148,6 +148,40 @@ function saveAll(manual){
 function dirty(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveAll(),400);}
 function actorName(){if(isAdmin())return"Admin";if(teamLocked&&currentUser)return currentUser;return"Team "+(teamFiliale||"");}
 function logAction(a){if(!state.log)state.log=[];state.log.push({t:new Date().toISOString(),u:actorName(),a:a});if(state.log.length>800)state.log=state.log.slice(-800);clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveAll(),400);if(document.getElementById("v-log")&&document.getElementById("v-log").classList.contains("on"))renderLog();}
+
+/* ---- Per-cell edit tracking + explicit unsaved state (Scheduler UX #5) ----
+   Client-only, session-scoped. Records who/when for cells edited in THIS
+   session and which cells are not yet persisted. Reuses actorName() and the
+   existing #saveState pill and per-cell marker pattern; no DB/engine change. */
+var _cellEdits={};                       // _cellEdits[id][d] = {by, at}
+var _cellUnsaved={};                     // _cellUnsaved["id_d"] = true (pending save)
+function _recordEdit(id,d){
+  if(!_cellEdits[id])_cellEdits[id]={};
+  _cellEdits[id][d]={by:actorName(),at:Date.now()};
+  _cellUnsaved[id+"_"+d]=true;
+  if(typeof markCellEdit==="function"){try{markCellEdit(id,d);}catch(e){}}
+  _schedPendingBadge();
+}
+function _schedPendingCount(){return Object.keys(_cellUnsaved).length;}
+function _schedPendingBadge(){
+  var el=document.getElementById("saveState");if(!el)return;
+  var n=_schedPendingCount();
+  if(n>0)el.textContent="● "+n+" non salvat"+(n===1?"a":"e");
+}
+// Called after a successful persist: clears the unsaved flags, refreshes the
+// per-cell markers and the pill. The by/when tooltip is kept for the session.
+function _schedMarkSaved(){
+  var ids=Object.keys(_cellUnsaved);_cellUnsaved={};
+  ids.forEach(function(k){var p=k.split("_"),id=+p[0],d=+p[1];if(typeof markCellEdit==="function"){try{markCellEdit(id,d);}catch(e){}}});
+  var el=document.getElementById("saveState");
+  if(el)el.textContent="✓ salvato "+new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+}
+// Public accessor for the renderer: the tooltip note + saved/unsaved flag.
+window._cellEditNote=function(id,d){
+  var e=_cellEdits[id]&&_cellEdits[id][d];if(!e)return null;
+  var t=new Date(e.at).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+  return {by:e.by,at:t,unsaved:!!_cellUnsaved[id+"_"+d]};
+};
 
 /* ---------- config helper ---------- */
 function codeMeta(c){return CFG().codes.find(x=>x.code===c)||{code:c,label:c,cls:"abs"};}
@@ -385,7 +419,7 @@ function resolveCode(v){v=(v||"").trim();if(!v)return"";const codes=CFG().codes.
 function commitCell(id,d,v){const r=resolveCode(v);if(r===null)return false;const dr=state.drivers.find(x=>x.id===id);
   // Contract expiry: days after the expiry date are OFF and locked. Any write
   // attempt (manual edit, paint, copy-week, import) is coerced to OFF.
-  if(dr&&afterExpiry(dr,d)){if(!state.schedule[id])state.schedule[id]={};if(state.schedule[id][d]!=="OFF"){state.schedule[id][d]="OFF";dirty();}return true;}
+  if(dr&&afterExpiry(dr,d)){if(!state.schedule[id])state.schedule[id]={};if(state.schedule[id][d]!=="OFF"){state.schedule[id][d]="OFF";dirty();_recordEdit(id,d);}return true;}
   // Absence codes follow contract working days on manual entry (paint / brush /
   // inline edit / drag). An absence code (Ferie/Malattia/Permesso/Infortunio/
   // ROL/… — class 'mal') lands only on the employee's contract working days; on
@@ -396,11 +430,11 @@ function commitCell(id,d,v){const r=resolveCode(v);if(r===null)return false;cons
     var _work=Array.isArray(dr.workDays)&&(dr.workDays.indexOf(_g)>=0||(_g===0&&dr.workDays.indexOf(7)>=0));
     if(!_work){
       if(!state.schedule[id])state.schedule[id]={};
-      if(state.schedule[id][d]!=="OFF"){state.schedule[id][d]="OFF";dirty();logAction("Riposo (giorno non lavorativo) "+(dr?dr.cognome+" "+dr.nome:id)+" "+fmtDM(YM,d));}
+      if(state.schedule[id][d]!=="OFF"){state.schedule[id][d]="OFF";dirty();_recordEdit(id,d);logAction("Riposo (giorno non lavorativo) "+(dr?dr.cognome+" "+dr.nome:id)+" "+fmtDM(YM,d));}
       return true;
     }
   }
-  const old=getCode(id,d);if(r===old)return true;if(!state.schedule[id])state.schedule[id]={};if(r)state.schedule[id][d]=r;else delete state.schedule[id][d];dirty();logAction("Turno "+(dr?dr.cognome+" "+dr.nome:id)+" "+fmtDM(YM,d)+": "+(r||"vuoto"));if(dr&&driverHasViolation(dr))toast("⚠️ "+dr.cognome+": 7+ giorni consecutivi senza riposo");return true;}
+  const old=getCode(id,d);if(r===old)return true;if(!state.schedule[id])state.schedule[id]={};if(r)state.schedule[id][d]=r;else delete state.schedule[id][d];dirty();_recordEdit(id,d);logAction("Turno "+(dr?dr.cognome+" "+dr.nome:id)+" "+fmtDM(YM,d)+": "+(r||"vuoto"));if(dr&&driverHasViolation(dr))toast("⚠️ "+dr.cognome+": 7+ giorni consecutivi senza riposo");return true;}
 function nextCell(id,d,dir){const di=gridDrivers.findIndex(x=>x.id===id),wi=gridDays.indexOf(d);if(dir==="down"&&di+1<gridDrivers.length)return[gridDrivers[di+1].id,d];if(dir==="up"&&di>0)return[gridDrivers[di-1].id,d];if(dir==="right"){if(wi+1<gridDays.length)return[id,gridDays[wi+1]];if(di+1<gridDrivers.length)return[gridDrivers[di+1].id,gridDays[0]];}if(dir==="left"){if(wi>0)return[id,gridDays[wi-1]];if(di>0)return[gridDrivers[di-1].id,gridDays[gridDays.length-1]];}return null;}
 function openCellEdit(id,d){const td=document.getElementById("c_"+id+"_"+d);if(!td)return;const cur=getCode(id,d);td.innerHTML="<div class='cellEdit'><input class='cellInp' list='codeList' value=\""+esc(cur)+"\" autocomplete='off' autocapitalize='off' spellcheck='false'><button class='cellPick' tabindex='-1' onmousedown='event.preventDefault();pickerFromEdit("+id+","+d+")'>▾</button></div>";const inp=td.querySelector(".cellInp");inp.focus();inp.select();
   inp.addEventListener("keydown",e=>cellKey(e,id,d));

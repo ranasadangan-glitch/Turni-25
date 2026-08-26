@@ -237,6 +237,10 @@
 .shift-cell.drag-over { outline: 2.5px solid var(--brand); outline-offset: -2px; background: var(--brand-lt); }
 .shift-cell.copy-over { outline: 2.5px solid var(--ok);    outline-offset: -2px; background: var(--ok-bg); }
 .shift-card.dragging  { opacity: .4; }
+/* Per-cell "last edited by/when" + unsaved marker (Scheduler UX #5) */
+.shift-cell .ed-mark { position: absolute; bottom: 0; left: 2px; font-size: 12px; line-height: .6; color: var(--muted); z-index: 1; cursor: help; }
+.shift-cell.sc-unsaved { box-shadow: inset 3px 0 0 var(--warn); }
+.shift-cell.sc-unsaved .ed-mark { color: var(--warn); }
 .tot-sc {
   min-width: 38px; border-right: 1px solid var(--border);
   text-align: center; font-size: .70rem; font-weight: 700;
