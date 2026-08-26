@@ -75,6 +75,10 @@ router.get('/dsp-dashboard', async (req, res) => {
   if (req.query.branch) { p1.push(req.query.branch); pf.push(req.query.branch); }
   const brEmp = req.query.branch ? ` AND b.code=$${p1.length}` : '';
   const brFc  = req.query.branch ? ` AND b.code=$${pf.length}` : '';
+  // Scheduler leg of the forecast reconciliation reuses the same branch value and
+  // gets its own scope clause on vf.branch_id (see forecast query below).
+  const brFcVf = req.query.branch ? ` AND vf.branch_code=$${pf.length}` : '';
+  const bcfVf  = branchClause(req.scope, pf, 'vf.branch_id');
 
   const planned = await pool.query(
     `SELECT st.name service, count(*)::int planned
@@ -84,13 +88,24 @@ router.get('/dsp-dashboard', async (req, res) => {
        JOIN service_types st ON st.default_shift_code=s.shift_code
       WHERE s.work_date=$1 ${bc1} ${brEmp}
       GROUP BY st.name`, p1);
+  // Scheduler-wins reconciliation (schedule_forecasts via v_forecast_days keyed by
+  // service_key = service_types.code); HR forecasts fill only where the scheduler
+  // has no row for the same (branch, service). Scheduler-only keys keep their key
+  // as the service label.
   const forecast = await pool.query(
-    `SELECT st.name service, sum(f.qty)::int qty
-       FROM forecasts f
-       JOIN branches b ON b.id=f.branch_id
-       JOIN service_types st ON st.id=f.service_type_id
-      WHERE f.forecast_date=$1 ${bcf} ${brFc}
-      GROUP BY st.name`, pf);
+    `WITH hr AS (
+       SELECT b.id AS bid, st.code AS code, st.name AS name, sum(f.qty)::int AS qty
+         FROM forecasts f JOIN branches b ON b.id=f.branch_id JOIN service_types st ON st.id=f.service_type_id
+        WHERE f.forecast_date=$1 ${bcf} ${brFc} GROUP BY 1,2,3),
+     sc AS (
+       SELECT vf.branch_id AS bid, vf.service_key AS code, COALESCE(st.name, vf.service_key) AS name, sum(vf.qty)::int AS qty
+         FROM v_forecast_days vf LEFT JOIN service_types st ON st.code=vf.service_key
+        WHERE vf.forecast_date=$1 ${bcfVf} ${brFcVf} GROUP BY 1,2,3),
+     fc AS (
+       SELECT bid, name, qty FROM sc
+       UNION ALL
+       SELECT hr.bid, hr.name, hr.qty FROM hr LEFT JOIN sc ON sc.bid=hr.bid AND sc.code=hr.code WHERE sc.code IS NULL)
+     SELECT name service, sum(qty)::int qty FROM fc GROUP BY name`, pf);
 
   const fMap = {}; forecast.rows.forEach(r => fMap[r.service] = r.qty);
   const pMap = {}; planned.rows.forEach(r => pMap[r.service] = r.planned);

@@ -42,16 +42,32 @@ router.get('/dashboard', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'from/to richiesti' });
   const branchFilter = req.query.branch ? ' AND b.code=$3' : '';
+  const branchFilterVf = req.query.branch ? ' AND vf.branch_code=$3' : '';
   const params = [from, to];
   if (req.query.branch) params.push(req.query.branch);
 
+  // Scheduler-wins forecast reconciliation: schedule_forecasts (via v_forecast_days,
+  // keyed by service_key = service_types.code) is authoritative per (branch,
+  // service, date); HR forecasts fill only where the scheduler has no row — so
+  // this dashboard matches the scheduler board / coverage / KPI figures.
   // planned = count of schedules whose shift_code maps to a service's default_shift_code
   const sql = `
-    WITH fc AS (
-      SELECT f.branch_id, f.service_type_id, f.forecast_date AS d, sum(f.qty) qty
+    WITH fc_hr AS (
+      SELECT f.branch_id, f.service_type_id, f.forecast_date AS d, sum(f.qty)::int qty
         FROM forecasts f JOIN branches b ON b.id=f.branch_id
        WHERE f.forecast_date BETWEEN $1 AND $2 ${branchFilter}
        GROUP BY 1,2,3),
+    fc_sc AS (
+      SELECT vf.branch_id, st.id AS service_type_id, vf.forecast_date AS d, sum(vf.qty)::int qty
+        FROM v_forecast_days vf JOIN service_types st ON st.code = vf.service_key
+       WHERE vf.forecast_date BETWEEN $1 AND $2 ${branchFilterVf}
+       GROUP BY 1,2,3),
+    fc AS (
+      SELECT branch_id, service_type_id, d, qty FROM fc_sc
+      UNION ALL
+      SELECT hr.branch_id, hr.service_type_id, hr.d, hr.qty FROM fc_hr hr
+        LEFT JOIN fc_sc s2 ON s2.branch_id=hr.branch_id AND s2.service_type_id=hr.service_type_id AND s2.d=hr.d
+       WHERE s2.service_type_id IS NULL),
     pl AS (
       SELECT e.branch_id, st.id AS service_type_id, s.work_date AS d, count(*) planned
         FROM v_schedule_days s
