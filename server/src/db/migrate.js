@@ -88,6 +88,14 @@ let _lockClient = null;
     // 20 — drop the legacy `schedules` table (phase 4). Guarded: migrates any
     // lingering rows into schedule_entries before dropping. Idempotent.
     await runFile(path.join(root, 'schema', '20_drop_schedules.sql'));
+    // 21 — backfill legacy HR `forecasts` into schedule_forecasts (single source
+    // of truth). Idempotent + scheduler-wins (ON CONFLICT DO NOTHING). Guarded so
+    // it is a no-op when the legacy table no longer exists (fresh install).
+    await runFile(path.join(root, 'schema', '21_forecast_backfill.sql'));
+    // 22 — retire the legacy `forecasts` table. MUST run after 21 (asserts every
+    // representable legacy row is already in schedule_forecasts, then drops).
+    // Idempotent and a no-op on a fresh install (table never created).
+    await runFile(path.join(root, 'schema', '22_drop_forecasts.sql'));
     // Seed the default scheduling rules once (skipped if any row exists).
     {
       const rc = await pool.query('SELECT count(*)::int AS c FROM scheduling_rules');

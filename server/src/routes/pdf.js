@@ -134,25 +134,18 @@ router.get('/disciplinary', async (req, res) => {
 // GET /api/pdf/forecast?from=&to=&branch=
 router.get('/forecast', async (req, res) => {
   const { from, to } = req.query; if (!from || !to) return res.status(400).json({ error: 'from/to richiesti' });
-  const params = [from, to]; const bc = branchClause(req.scope, params, 'f.branch_id');
+  const params = [from, to];
   const bcVf = branchClause(req.scope, params, 'vf.branch_id');
-  // Scheduler-wins reconciliation (schedule_forecasts via v_forecast_days keyed by
-  // service_key = service_types.code); HR fills only gaps. One row per (branch,
-  // service, date) in both stores, so no aggregation needed.
+  // Forecast from the single source of truth: schedule_forecasts via
+  // v_forecast_days (service_key = service_types.code). Scheduler-only keys keep
+  // their key as the service label. (The legacy HR `forecasts` fallback leg was
+  // removed after the backfill made it redundant.)
   const { rows } = await pool.query(
-    `WITH hr AS (
-       SELECT b.code AS branch_code, st.code AS code, st.name AS name, f.forecast_date AS d, f.qty::int AS qty
-         FROM forecasts f JOIN branches b ON b.id=f.branch_id JOIN service_types st ON st.id=f.service_type_id
-        WHERE f.forecast_date BETWEEN $1 AND $2 ${bc}),
-     sc AS (
-       SELECT vf.branch_code, vf.service_key AS code, COALESCE(st.name, vf.service_key) AS name, vf.forecast_date AS d, vf.qty::int AS qty
-         FROM v_forecast_days vf LEFT JOIN service_types st ON st.code=vf.service_key
-        WHERE vf.forecast_date BETWEEN $1 AND $2 ${bcVf})
-     SELECT branch_code, name AS service, d AS forecast_date, qty FROM sc
-     UNION ALL
-     SELECT hr.branch_code, hr.name, hr.d, hr.qty FROM hr LEFT JOIN sc
-       ON sc.branch_code=hr.branch_code AND sc.code=hr.code AND sc.d=hr.d WHERE sc.code IS NULL
-     ORDER BY forecast_date, service`, params);
+    `SELECT vf.branch_code, COALESCE(st.name, vf.service_key) AS service,
+            vf.forecast_date AS forecast_date, vf.qty::int AS qty
+       FROM v_forecast_days vf LEFT JOIN service_types st ON st.code=vf.service_key
+      WHERE vf.forecast_date BETWEEN $1 AND $2 ${bcVf}
+      ORDER BY forecast_date, service`, params);
   const doc = startPdf(res, `report_forecast_${from}_${to}.pdf`);
   header(doc, 'Report forecast', `${from} – ${to}`);
   const w = [80, 140, 90, 60];
