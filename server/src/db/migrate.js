@@ -45,8 +45,17 @@ async function ensureAdmin() {
   }
 }
 
+// Serialize concurrent migration runners (multiple instances / restart storms)
+// with a Postgres session advisory lock. Idempotent SQL makes a partial-then-
+// retry safe; a crashed holder's session ends and auto-releases the lock.
+const MIGRATION_LOCK_KEY = 472025;
+let _lockClient = null;
+
 (async () => {
   try {
+    _lockClient = await pool.connect();
+    await _lockClient.query("SET lock_timeout = '60s'");   // fail visibly rather than hang if a stuck runner holds it
+    await _lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
     const root = path.resolve(__dirname, '../../database');
     // Schema is idempotent (CREATE/ALTER ... IF NOT EXISTS) so it is safe to
     // run on every deploy.
@@ -134,6 +143,8 @@ async function ensureAdmin() {
     // Always make sure a login exists (no-op if users already present).
     await ensureAdmin();
     console.log('Migration complete.');
+    await _lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]);
+    _lockClient.release(); _lockClient = null;
     await pool.end();
     process.exit(0);
   } catch (e) {
@@ -148,6 +159,9 @@ async function ensureAdmin() {
     if (/ECONNREFUSED|ENOTFOUND|timeout/i.test(e.message)) {
       console.error('Hint: cannot reach the database. Check DATABASE_URL host/port and that the DB is running.');
     }
+    // Destroy the lock client (truthy arg) so its session closes — releasing the
+    // advisory lock — and pool.end() won't hang on a checked-out connection.
+    try { if (_lockClient) _lockClient.release(new Error('migration failed')); } catch (_) { /* ignore */ }
     try { await pool.end(); } catch (_) { /* ignore */ }
     process.exit(1);
   }

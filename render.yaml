@@ -8,8 +8,19 @@ services:
     runtime: node
     rootDir: server
     plan: starter
-    buildCommand: npm install
-    startCommand: npm start        # runs migrations (SSL-aware) then serves API + frontend
+    buildCommand: npm ci
+    # Migrations run once per deploy in the pre-deploy phase (advisory-locked,
+    # SSL-aware), while the previous version keeps serving — zero-downtime for
+    # normal deploys.
+    preDeployCommand: npm run migrate
+    # `npm start` = migrate && serve. The boot-time migrate is a belt-and-braces
+    # guarantee that the schema exists before the server accepts traffic: Render
+    # SKIPS preDeployCommand on a service's FIRST deploy, which otherwise brings
+    # the app up against an empty database (relation "role_permissions"/"users"
+    # does not exist -> RBAC warning + login 503). Migrations are idempotent and
+    # advisory-locked, so on a normal deploy this second run is a fast no-op
+    # (preDeploy already migrated) and concurrent boots are safe.
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL

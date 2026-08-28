@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const fs = require('fs');
 require('dotenv').config();
 
 // ── Connection configuration ───────────────────────────────────────────────
@@ -6,20 +7,43 @@ require('dotenv').config();
 // DATABASE_URL and REQUIRE SSL. We read DATABASE_URL from the environment and
 // enable SSL automatically when it is present.
 //
-// SSL rules:
-//   • DATABASE_URL present  -> SSL on by default ({ rejectUnauthorized: false })
-//   • PGSSL=true            -> force SSL on
-//   • PGSSL=false           -> force SSL off (e.g. local Postgres / private nets
-//                              that don't terminate TLS)
-//   • no DATABASE_URL       -> discrete PG* vars, SSL off unless PGSSL=true
-// Render's managed PostgreSQL terminates TLS, so SSL must be enabled there.
+// SSL rules (CA-gated certificate verification, backward compatible):
+//   • PGSSL=false            -> SSL off (local Postgres / private nets).
+//   • SSL on = PGSSL=true OR a DATABASE_URL is present. When on:
+//       – A CA is provided via PG_CA_CERT (PEM string) or PGSSLROOTCERT (file
+//         path)  ->  { ca, rejectUnauthorized: true }  — the server cert is
+//         VERIFIED against that CA. PGSSL_MODE=verify-ca additionally skips the
+//         hostname check, for providers whose connect host doesn't match the
+//         cert SAN (e.g. Render's INTERNAL DATABASE_URL host); default is
+//         verify-full (CA + hostname).
+//       – No CA  ->  { rejectUnauthorized: false }  — encrypt-only, unauthenticated.
+//         This is the previous behavior, preserved so existing deployments keep
+//         working (Railway has no pinnable public CA, so it stays here).
 const hasUrl = !!process.env.DATABASE_URL;
 
+function loadCa() {
+  const inline = process.env.PG_CA_CERT;
+  if (inline && inline.trim()) return inline;
+  const file = process.env.PGSSLROOTCERT;
+  if (file) {
+    try { return fs.readFileSync(file, 'utf8'); }
+    catch (e) { console.error('[db] PGSSLROOTCERT unreadable, falling back to encrypt-only:', e.message); }
+  }
+  return null;
+}
+
 function resolveSsl() {
-  if (process.env.PGSSL === 'true') return { rejectUnauthorized: false };
   if (process.env.PGSSL === 'false') return false;
-  // default: require SSL whenever we connect via a managed DATABASE_URL
-  return hasUrl ? { rejectUnauthorized: false } : false;
+  const sslOn = process.env.PGSSL === 'true' || hasUrl;
+  if (!sslOn) return false;
+  const ca = loadCa();
+  if (ca) {
+    const opts = { ca, rejectUnauthorized: true };
+    // verify-ca: authenticate the CA chain but tolerate a hostname mismatch.
+    if ((process.env.PGSSL_MODE || 'verify-full') === 'verify-ca') opts.checkServerIdentity = () => undefined;
+    return opts;
+  }
+  return { rejectUnauthorized: false };   // encrypt-only (unauthenticated) — unchanged default
 }
 
 const ssl = resolveSsl();
@@ -51,9 +75,11 @@ const pool = new Pool(config);
 
 pool.on('error', (err) => console.error('PG pool error:', err.message));
 
-// Log the effective mode once at startup (no secrets).
+// Log the effective mode once at startup (no secrets — the CA is never printed).
+const sslLabel = !ssl ? 'off'
+  : (ssl.rejectUnauthorized ? (ssl.checkServerIdentity ? 'verify-ca' : 'verify-full') : 'encrypt-only');
 console.log(
-  `[db] mode=${hasUrl ? 'DATABASE_URL' : 'PG* vars'} ssl=${ssl ? 'on' : 'off'} poolMax=${max}`
+  `[db] mode=${hasUrl ? 'DATABASE_URL' : 'PG* vars'} ssl=${sslLabel} poolMax=${max}`
 );
 
 module.exports = {

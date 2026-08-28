@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const { pool } = require('./db/pool');
 
 const app = express();
 
@@ -126,8 +127,29 @@ const UPLOADS = process.env.UPLOAD_DIR || path.resolve(__dirname, '../uploads');
 const { auth } = require('./middleware/auth');
 app.use('/uploads', auth, express.static(UPLOADS, { dotfiles: 'deny', index: false }));
 
-// health
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+// health — verifies DB connectivity AND that the schema is present, so a
+// reachable-but-unmigrated instance (e.g. Render's first deploy skips the
+// pre-deploy migrate) fails the platform healthcheck instead of silently
+// receiving traffic it can't serve. A single, bounded catalog lookup covers
+// both: to_regclass() is a cheap system-catalog probe (no table scan) that
+// returns NULL — never an error — when the table is absent, so the query
+// succeeding proves connectivity and its boolean proves the schema exists.
+// `users` is the core table login depends on.
+app.get('/api/health', async (_req, res) => {
+  try {
+    const r = await Promise.race([
+      pool.query("SELECT to_regclass('public.users') IS NOT NULL AS ready"),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('db timeout')), 2500)),
+    ]);
+    if (!r.rows[0].ready) {
+      // DB reachable but schema not installed yet.
+      return res.status(503).json({ ok: false, db: 'up', schema: 'missing', ts: new Date().toISOString() });
+    }
+    res.json({ ok: true, db: 'up', ts: new Date().toISOString() });
+  } catch (e) {
+    res.status(503).json({ ok: false, db: 'down', ts: new Date().toISOString() });
+  }
+});
 
 // ---- serve the frontend ----
 // The login page IS the index: '/' serves login.html directly. After
