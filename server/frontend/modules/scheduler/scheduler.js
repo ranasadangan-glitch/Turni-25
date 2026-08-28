@@ -128,7 +128,18 @@ async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedule
 // Refetch the roster from the employees-backed month endpoint (spec §14) so
 // employee create/edit/delete reflect in the scheduler without a page refresh.
 window.syncSchedulerFromDB=async function(){try{if(typeof state==="undefined"||!state)return;const br=teamFiliale||(filiali()[0]||"DLO1");await loadMonthFromDB(YM,br);if(typeof refreshAll==="function")refreshAll();}catch(e){}};
-async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved();}catch(e){console.warn("[DB]",e.message);window._schedSaving=false;const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
+async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";
+  // Delta save (Perf #1): send ONLY the cells changed this session (_cellUnsaved),
+  // not the whole month. A cell still present in state.schedule is upserted; a
+  // cleared cell (absent from state.schedule) is sent with an empty shift_code so
+  // /entries/bulk DELETEs it — preserving clear behavior. Forecasts stay full
+  // (small: services×days). Only the sent keys are marked saved (mid-save edits stay pending).
+  const savedKeys=Object.keys(_cellUnsaved);
+  try{const drvById=new Map();for(const x of (state.drivers||[]))if(!drvById.has(String(x.id)))drvById.set(String(x.id),x);/* O(N) id→driver lookup; keeps first-match semantics */
+    const ci=[];
+    for(const key of savedKeys){const us=key.indexOf("_");const rawId=key.slice(0,us);const day=+key.slice(us+1);const d=drvById.get(String(rawId));const code=(state.schedule[rawId]||{})[day];ci.push({employee_id:d?d.id:+rawId,day:day,shift_code:code||"",branch_code:(d&&d.filiale)||branch});}
+    const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}
+    await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved(savedKeys);}catch(e){console.warn("[DB]",e.message);window._schedSaving=false;const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
 let saveTimer=null;
 function saveAll(manual){
   // Write to localStorage as offline cache
@@ -183,8 +194,11 @@ window._schedRenderSave=function(){
 function _schedPendingBadge(){ window._schedRenderSave(); }
 // Called after a successful persist: clears the unsaved flags, refreshes the
 // per-cell markers and the pill. The by/when tooltip is kept for the session.
-function _schedMarkSaved(){
-  var ids=Object.keys(_cellUnsaved);_cellUnsaved={};
+function _schedMarkSaved(onlyKeys){
+  // Clear only the keys actually persisted (delta save passes the set it sent) so
+  // cells edited mid-save stay pending; with no argument, clear all (local mode).
+  var ids=onlyKeys||Object.keys(_cellUnsaved);
+  ids.forEach(function(k){delete _cellUnsaved[k];});
   ids.forEach(function(k){var p=k.split("_"),id=+p[0],d=+p[1];if(typeof markCellEdit==="function"){try{markCellEdit(id,d);}catch(e){}}});
   window._schedLastSavedAt=Date.now();
   window._schedSaving=false;
@@ -371,20 +385,24 @@ function _msOk(key,val){var a=_msArr(key);return !a.length||a.indexOf(val==null?
 function filteredDrivers(){
   const q=_fv("q").toLowerCase().trim();
   const terms=q?q.split(/\s+/):[];
-  return scopedActive()
-    .filter(d=>_msOk("fFiliale",d.filiale))
-    .filter(d=>_msOk("fService",d.service))
-    .filter(d=>_msOk("fContract",d.contratto||""))
-    .filter(d=>_msOk("fTeam",d.team||""))
-    .filter(d=>_msOk("fManager",d.manager||d.osm||""))
-    .filter(d=>_msOk("fStato",dayStatus(d,gridRefDay)))
-    .filter(d=>{if(!terms.length)return true;const h=_drvHay(d);return terms.every(t=>h.includes(t));})
-    // Excel-style column AutoFilters (AND). Day columns + Employee + Week + SEM.
-    .filter(d=>typeof colFilterMatch!=="function"||colFilterMatch(d.id))
-    .filter(d=>typeof empFilterMatch!=="function"||empFilterMatch(d.id))
-    .filter(d=>typeof weekFilterMatch!=="function"||weekFilterMatch(d.id))
-    .filter(d=>typeof semFilterMatch!=="function"||semFilterMatch(d))
-    .sort((a,b)=>a.cognome.localeCompare(b.cognome));
+  // Single pass (perf): same predicates, same order/short-circuit as the former
+  // chained .filter()s (all AND). Excel-style column AutoFilters guarded once.
+  const hasCol=typeof colFilterMatch==="function",hasEmp=typeof empFilterMatch==="function",
+        hasWeek=typeof weekFilterMatch==="function",hasSem=typeof semFilterMatch==="function";
+  return scopedActive().filter(d=>{
+    if(!_msOk("fFiliale",d.filiale))return false;
+    if(!_msOk("fService",d.service))return false;
+    if(!_msOk("fContract",d.contratto||""))return false;
+    if(!_msOk("fTeam",d.team||""))return false;
+    if(!_msOk("fManager",d.manager||d.osm||""))return false;
+    if(!_msOk("fStato",dayStatus(d,gridRefDay)))return false;
+    if(terms.length){const h=_drvHay(d);if(!terms.every(t=>h.includes(t)))return false;}
+    if(hasCol&&!colFilterMatch(d.id))return false;
+    if(hasEmp&&!empFilterMatch(d.id))return false;
+    if(hasWeek&&!weekFilterMatch(d.id))return false;
+    if(hasSem&&!semFilterMatch(d))return false;
+    return true;
+  }).sort((a,b)=>a.cognome.localeCompare(b.cognome));
 }
 function maybeOfferAuto(){const b=document.getElementById("autoBanner");if(!b)return;const _ms=baseScoped();const empty=_ms.every(d=>!state.schedule[d.id]||Object.keys(state.schedule[d.id]).length===0);if(_ms.length&&empty){b.style.display="flex";b.innerHTML="<b>Turni del mese vuoti.</b><span class='grow'>Generare automaticamente in base ai contratti dei DAS?</span><button class='btn amber' onclick='openAuto()'>Genera ora</button>";}else b.style.display="none";}
 

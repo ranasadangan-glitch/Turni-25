@@ -1,24 +1,31 @@
 // Excel (XLSX) import/export and downloadable templates.
-// Uses SheetJS. Imports are admin-only; exports respect branch scope.
+// Uses ExcelJS. Imports are admin-only; exports respect branch scope.
 const router = require('express').Router();
 const multer = require('multer');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { pool, withTx } = require('../db/pool');
 const { auth, requireAdmin, loadScope, audit } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 router.use(auth, loadScope);
 
-function sendWorkbook(res, wb, filename) {
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+async function sendWorkbook(res, wb, filename) {
+  const buf = await wb.xlsx.writeBuffer();
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send(buf);
+  res.send(Buffer.from(buf));
 }
 function sheetToWb(rows, sheetName) {
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(sheetName);
+  // Column order = union of row keys in first-appearance order (matches the
+  // previous SheetJS json_to_sheet). Header row is the keys; addRow maps by key.
+  const keys = [];
+  rows.forEach((r) => Object.keys(r).forEach((k) => { if (!keys.includes(k)) keys.push(k); }));
+  if (keys.length) {
+    ws.columns = keys.map((k) => ({ header: k, key: k }));
+    rows.forEach((r) => ws.addRow(r));
+  }
   return wb;
 }
 function branchClause(scope, params, col) {
@@ -39,30 +46,65 @@ router.get('/template/:type', async (req, res) => {
       work_days: '1,2,3,4,5', hire_date: '2024-03-01',
       contract_start_date: '2024-03-01', contract_end_date: '', status: 'active',
     }], 'Employees');
-    return sendWorkbook(res, wb, 'template_employees.xlsx');
+    return await sendWorkbook(res, wb, 'template_employees.xlsx');
   }
   if (t === 'forecast') {
     const wb = sheetToWb([
       { branch_code: 'DLO1', service_code: 'NEXT', forecast_date: '2026-06-15', qty: 120 },
       { branch_code: 'DLO1', service_code: 'SAMEA', forecast_date: '2026-06-15', qty: 40 },
     ], 'Forecast');
-    return sendWorkbook(res, wb, 'template_forecast.xlsx');
+    return await sendWorkbook(res, wb, 'template_forecast.xlsx');
   }
   if (t === 'schedule') {
     const wb = sheetToWb([
       { employee_code: 'EMP001', work_date: '2026-06-15', shift_code: 'X' },
       { employee_code: 'EMP001', work_date: '2026-06-16', shift_code: 'OFF' },
     ], 'Schedule');
-    return sendWorkbook(res, wb, 'template_schedule.xlsx');
+    return await sendWorkbook(res, wb, 'template_schedule.xlsx');
   }
   res.status(400).json({ error: 'Tipo non valido' });
 });
 
 // ---------------- IMPORTS (admin) ----------------
-function readRows(file) {
-  const wb = XLSX.read(file.buffer, { type: 'buffer' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: null });
+// Normalize an ExcelJS cell value to a primitive (rich text / hyperlink /
+// formula → their displayed value). Empty cells arrive as null.
+function cellVal(v) {
+  if (v == null) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === 'object') {
+    if (Array.isArray(v.richText)) return v.richText.map((t) => t.text).join('');
+    if ('text' in v) return v.text;        // hyperlink { text, hyperlink }
+    if ('result' in v) return v.result;    // formula  { formula, result }
+    return v;
+  }
+  return v;
+}
+// Read the first sheet into an array of objects keyed by the header row, with
+// missing cells as null and fully-blank rows skipped — matches the previous
+// SheetJS sheet_to_json(ws, { defval: null }) behavior.
+async function readRows(file) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(file.buffer);
+  const ws = wb.worksheets[0];
+  if (!ws) return [];
+  const cols = [];
+  ws.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+    const name = cellVal(cell.value);
+    if (name != null && name !== '') cols.push({ col, name: String(name) });
+  });
+  const out = [];
+  for (let i = 2; i <= ws.rowCount; i++) {
+    const row = ws.getRow(i);
+    const obj = {}; let any = false;
+    for (const { col, name } of cols) {
+      let v = cellVal(row.getCell(col).value);
+      if (v === undefined) v = null;
+      obj[name] = v;
+      if (v != null && v !== '') any = true;
+    }
+    if (any) out.push(obj);
+  }
+  return out;
 }
 function isoDate(v) {
   if (!v) return null;
@@ -74,7 +116,7 @@ function isoDate(v) {
 // POST /api/xlsx/import/employees
 router.post('/import/employees', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File mancante' });
-  const rows = readRows(req.file);
+  const rows = await readRows(req.file);
   // resolve lookups once
   const branches = (await pool.query('SELECT id,code FROM branches')).rows;
   const teams = (await pool.query('SELECT id,name FROM teams')).rows;
@@ -113,7 +155,7 @@ router.post('/import/employees', requireAdmin, upload.single('file'), async (req
 // POST /api/xlsx/import/forecast
 router.post('/import/forecast', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File mancante' });
-  const rows = readRows(req.file);
+  const rows = await readRows(req.file);
   const branches = (await pool.query('SELECT id,code FROM branches')).rows;
   const services = (await pool.query('SELECT id,code FROM service_types')).rows;
   const find = (arr, val) => arr.find(x => String(x.code).toLowerCase() === String(val || '').toLowerCase());
@@ -122,12 +164,17 @@ router.post('/import/forecast', requireAdmin, upload.single('file'), async (req,
     for (const r of rows) {
       const br = find(branches, r.branch_code), sv = find(services, r.service_code), d = isoDate(r.forecast_date);
       if (!br || !sv || !d) { skipped++; continue; }
+      // Forecast consolidation: import into schedule_forecasts (single source of
+      // truth, read back via v_forecast_days). The lookups already resolved the
+      // branch/service to their codes, which ARE the scheduler keys (branch_code
+      // and service_key = service_types.code); forecast_date maps to
+      // (schedule_month, day_of_month).
       await c.query(
-        `INSERT INTO forecasts (branch_id,service_type_id,forecast_date,qty,updated_by)
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (branch_id,service_type_id,forecast_date)
+        `INSERT INTO schedule_forecasts (schedule_month, branch_code, service_key, day_of_month, qty, updated_by)
+         VALUES (date_trunc('month',$1::date)::date, $2, $3, EXTRACT(DAY FROM $1::date)::int, $4, $5)
+         ON CONFLICT (schedule_month, branch_code, service_key, day_of_month)
          DO UPDATE SET qty=EXCLUDED.qty, updated_by=EXCLUDED.updated_by, updated_at=now()`,
-        [br.id, sv.id, d, +r.qty || 0, req.user.username]);
+        [d, br.code, sv.code, +r.qty || 0, req.user.username]);
       added++;
     }
   });
@@ -138,7 +185,7 @@ router.post('/import/forecast', requireAdmin, upload.single('file'), async (req,
 // POST /api/xlsx/import/schedule
 router.post('/import/schedule', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File mancante' });
-  const rows = readRows(req.file);
+  const rows = await readRows(req.file);
   const emps = (await pool.query('SELECT id,employee_code FROM employees')).rows;
   const byCode = {}; emps.forEach(e => { if (e.employee_code) byCode[e.employee_code.toLowerCase()] = e.id; });
   let added = 0, skipped = 0;
@@ -179,32 +226,25 @@ router.get('/export/employees', async (req, res) => {
        LEFT JOIN service_types st ON st.id=e.service_type_id LEFT JOIN contract_types ct ON ct.id=e.contract_type_id
       WHERE 1=1 ${bc} ORDER BY e.last_name,e.first_name`, params);
   await audit(req, 'employee', null, 'export', `Export XLSX dipendenti (${rows.length})`);
-  sendWorkbook(res, sheetToWb(rows, 'Employees'), 'employees.xlsx');
+  await sendWorkbook(res, sheetToWb(rows, 'Employees'), 'employees.xlsx');
 });
 
 // GET /api/xlsx/export/forecast?from=&to=
 router.get('/export/forecast', async (req, res) => {
   const { from, to } = req.query; if (!from || !to) return res.status(400).json({ error: 'from/to richiesti' });
-  const params = [from, to]; const bc = branchClause(req.scope, params, 'f.branch_id');
+  const params = [from, to];
   const bcVf = branchClause(req.scope, params, 'vf.branch_id');
-  // Scheduler-wins reconciliation (schedule_forecasts via v_forecast_days keyed by
-  // service_key = service_types.code); HR fills only gaps. Scheduler-only keys
-  // export under their service_key as service_code.
+  // Forecast from the single source of truth: schedule_forecasts via
+  // v_forecast_days. Scheduler-only keys export under their service_key. (The
+  // legacy HR `forecasts` fallback leg was removed after the backfill made it
+  // redundant.)
   const { rows } = await pool.query(
-    `WITH hr AS (
-       SELECT b.code AS branch_code, st.code AS code, f.forecast_date AS d, f.qty::int AS qty
-         FROM forecasts f JOIN branches b ON b.id=f.branch_id JOIN service_types st ON st.id=f.service_type_id
-        WHERE f.forecast_date BETWEEN $1 AND $2 ${bc}),
-     sc AS (
-       SELECT vf.branch_code, vf.service_key AS code, vf.forecast_date AS d, vf.qty::int AS qty
-         FROM v_forecast_days vf
-        WHERE vf.forecast_date BETWEEN $1 AND $2 ${bcVf})
-     SELECT branch_code, code AS service_code, d AS forecast_date, qty FROM sc
-     UNION ALL
-     SELECT hr.branch_code, hr.code, hr.d, hr.qty FROM hr LEFT JOIN sc
-       ON sc.branch_code=hr.branch_code AND sc.code=hr.code AND sc.d=hr.d WHERE sc.code IS NULL
-     ORDER BY forecast_date`, params);
-  sendWorkbook(res, sheetToWb(rows, 'Forecast'), 'forecast.xlsx');
+    `SELECT vf.branch_code, vf.service_key AS service_code,
+            vf.forecast_date AS forecast_date, vf.qty::int AS qty
+       FROM v_forecast_days vf
+      WHERE vf.forecast_date BETWEEN $1 AND $2 ${bcVf}
+      ORDER BY forecast_date`, params);
+  await sendWorkbook(res, sheetToWb(rows, 'Forecast'), 'forecast.xlsx');
 });
 
 // GET /api/xlsx/export/schedule?from=&to=
@@ -215,7 +255,7 @@ router.get('/export/schedule', async (req, res) => {
     `SELECT e.employee_code, e.last_name, e.first_name, b.code branch_code, s.work_date, s.shift_code
        FROM v_schedule_days s JOIN employees e ON e.id=s.employee_id JOIN branches b ON b.id=e.branch_id
       WHERE s.work_date BETWEEN $1 AND $2 ${bc} ORDER BY e.last_name, s.work_date`, params);
-  sendWorkbook(res, sheetToWb(rows, 'Schedule'), 'schedule.xlsx');
+  await sendWorkbook(res, sheetToWb(rows, 'Schedule'), 'schedule.xlsx');
 });
 
 // ---------------- SCHEDULER FORECAST (schedule_forecasts) ----------------
@@ -266,7 +306,7 @@ router.get('/export/scheduler-forecast', async (req, res) => {
     return row;
   });
   await audit(req, 'config', null, 'export', `Export XLSX forecast ${branch} ${month}`);
-  sendWorkbook(res, sheetToWb(out, 'Forecast'), `forecast_${branch}_${month}.xlsx`);
+  await sendWorkbook(res, sheetToWb(out, 'Forecast'), `forecast_${branch}_${month}.xlsx`);
 });
 
 // POST /api/xlsx/import/scheduler-forecast   (month + branch as form fields)
@@ -277,7 +317,7 @@ router.post('/import/scheduler-forecast', requireAdmin, upload.single('file'), a
   const branch = req.body.branch || req.query.branch || 'DLO1';
   const { days, first } = monthMeta(month);
 
-  const rows = readRows(req.file);
+  const rows = await readRows(req.file);
   let saved = 0, skipped = 0;
   await withTx(async (c) => {
     for (const r of rows) {
