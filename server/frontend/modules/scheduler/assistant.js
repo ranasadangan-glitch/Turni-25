@@ -228,7 +228,7 @@
       const reason = s.reason ? "<div class='text-xs text-muted' style='margin-top:3px'>" + esc(s.reason) + "</div>" : '';
       // One-click apply for actionable (coverage) suggestions.
       const action = (s.apply && s.apply.drivers && s.apply.drivers.length)
-        ? "<div style='margin-top:8px'><button class='btn btn-primary sm' onclick='applyAiSuggestion(" + i + ")'>✔ Assegna " + s.apply.drivers.length + "</button></div>" : '';
+        ? "<div style='margin-top:8px'><button class='btn btn-primary sm' "+actAttr('click','applyAiSuggestion',[i])+">✔ Assegna " + s.apply.drivers.length + "</button></div>" : '';
       return "<div class='ai-card'>" +
         "<div class='ai-card-head'><span class='ai-icon'>" + s.icon + "</span>" +
         "<span class='badge " + (SEV[s.severity] || 'b-muted') + "'>" + esc(s.category) + "</span></div>" +

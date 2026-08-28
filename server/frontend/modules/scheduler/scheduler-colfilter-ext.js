@@ -178,7 +178,7 @@
       var hay = [dr.cognome, dr.nome, dr.id, dr.transporterId, dr.badge, dr.matricola, dr.phone, dr.telefono].filter(Boolean).join(' ').toLowerCase();
       var sub = [dr.transporterId ? '#' + dr.transporterId : '', dr.filiale].filter(Boolean).join(' · ');
       return "<label class='colf-opt colx-opt' data-v='" + esc(hay) + "'>" +
-        "<input type='checkbox' value='" + esc(String(dr.id)) + "'" + (checked ? ' checked' : '') + " onchange='colxRowChange()'>" +
+        "<input type='checkbox' value='" + esc(String(dr.id)) + "'" + (checked ? ' checked' : '') + actAttr('change', 'colxRowChange') + ">" +
         "<span class='colf-code'>" + esc((dr.cognome || '') + ' ' + (dr.nome || '')) + "</span>" +
         (sub ? "<span class='colf-lbl'>" + esc(sub) + "</span>" : '') + "</label>";
     }).join('');
@@ -187,14 +187,14 @@
     var inner =
       "<div class='colf-h'>Dipendenti · <b>Tutti</b></div>" +
       "<div class='colx-sortrow'>" +
-        "<button class='colx-sort" + (sd && s.dir !== -1 && s.key === 'name' ? ' on' : '') + "' onclick=\"schedColSort('name',1)\">↑ A–Z</button>" +
-        "<button class='colx-sort" + (s.key === 'name' && s.dir === -1 ? ' on' : '') + "' onclick=\"schedColSort('name',-1)\">↓ Z–A</button>" +
+        "<button class='colx-sort" + (sd && s.dir !== -1 && s.key === 'name' ? ' on' : '') + "'" + actAttr('click', 'schedColSort', ['name', 1]) + ">↑ A–Z</button>" +
+        "<button class='colx-sort" + (s.key === 'name' && s.dir === -1 ? ' on' : '') + "'" + actAttr('click', 'schedColSort', ['name', -1]) + ">↓ Z–A</button>" +
       "</div>" +
-      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Nome, cognome, ID, badge, telefono…' oninput='colxSearch(this.value)' autocomplete='off'></div>" +
-      "<label class='colf-all'><input type='checkbox' id='colxAll' onchange='colxToggleAll(this.checked)'><b>Seleziona tutto</b></label>" +
+      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Nome, cognome, ID, badge, telefono…'" + actAttr('input', 'colxSearch', ['@value']) + " autocomplete='off'></div>" +
+      "<label class='colf-all'><input type='checkbox' id='colxAll'" + actAttr('change', 'colxToggleAll', ['@checked']) + "><b>Seleziona tutto</b></label>" +
       "<div class='colf-list' id='colxList'>" + (rows || "<div class='colf-empty'>Nessun dipendente</div>") + "</div>" +
-      "<div class='colf-foot'><button class='colf-clear' onclick='empFilterClear()'>Cancella filtro</button>" +
-      "<button class='colf-apply' onclick='empFilterApply()'>Applica</button></div>";
+      "<div class='colf-foot'><button class='colf-clear'" + actAttr('click', 'empFilterClear') + ">Cancella filtro</button>" +
+      "<button class='colf-apply'" + actAttr('click', 'empFilterApply') + ">Applica</button></div>";
     var pop = _open('emp', inner, btn);
     if (pop) { _colxUpdAll(); var si = pop.querySelector('.colf-search input'); if (si) setTimeout(function () { si.focus(); }, 0); }
   };
@@ -226,17 +226,17 @@
       var disp = v === '' ? '(Vuoto)' : v;
       var lab = (v !== '' && typeof codeLabel === 'function') ? (codeLabel(v) || '') : '';
       return "<label class='colf-opt colx-opt' data-v='" + esc((disp + ' ' + lab).toLowerCase()) + "'>" +
-        "<input type='checkbox' value=\"" + esc(v) + "\"" + (checked ? ' checked' : '') + " onchange='colxRowChange()'>" +
+        "<input type='checkbox' value=\"" + esc(v) + "\"" + (checked ? ' checked' : '') + actAttr('change', 'colxRowChange') + ">" +
         "<span class='colf-code'>" + esc(disp) + "</span>" + (lab ? "<span class='colf-lbl'>" + esc(lab) + "</span>" : '') + "</label>";
     }).join('');
     var lbl = (days.length ? String(days[0]).padStart(2, '0') + '–' + String(days[days.length - 1]).padStart(2, '0') : '');
     var inner =
       "<div class='colf-h'>Settimana · <b>" + esc(lbl) + "</b></div>" +
-      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Cerca codici…' oninput='colxSearch(this.value)' autocomplete='off'></div>" +
-      "<label class='colf-all'><input type='checkbox' id='colxAll' onchange='colxToggleAll(this.checked)'><b>Seleziona tutto</b></label>" +
+      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Cerca codici…'" + actAttr('input', 'colxSearch', ['@value']) + " autocomplete='off'></div>" +
+      "<label class='colf-all'><input type='checkbox' id='colxAll'" + actAttr('change', 'colxToggleAll', ['@checked']) + "><b>Seleziona tutto</b></label>" +
       "<div class='colf-list' id='colxList'>" + (rows || "<div class='colf-empty'>Nessun valore</div>") + "</div>" +
-      "<div class='colf-foot'><button class='colf-clear' onclick=\"weekFilterClear('" + esc(wkStart) + "')\">Cancella filtro</button>" +
-      "<button class='colf-apply' onclick=\"weekFilterApply('" + esc(wkStart) + "')\">Applica</button></div>";
+      "<div class='colf-foot'><button class='colf-clear'" + actAttr('click', 'weekFilterClear', [wkStart]) + ">Cancella filtro</button>" +
+      "<button class='colf-apply'" + actAttr('click', 'weekFilterApply', [wkStart]) + ">Applica</button></div>";
     var pop = _open('wk:' + wkStart, inner, btn);
     if (pop) { _colxUpdAll(); var si = pop.querySelector('.colf-search input'); if (si) setTimeout(function () { si.focus(); }, 0); }
   };
@@ -257,10 +257,10 @@
     var s = window._schedColSort || {};
     function sortBtn(key, label) {
       return "<div class='colx-sortline'><span>" + label + "</span>" +
-        "<button class='colx-sort" + (s.key === key && s.dir !== -1 ? ' on' : '') + "' title='Crescente' onclick=\"schedColSort('" + key + "',1)\">↑</button>" +
-        "<button class='colx-sort" + (s.key === key && s.dir === -1 ? ' on' : '') + "' title='Decrescente' onclick=\"schedColSort('" + key + "',-1)\">↓</button></div>";
+        "<button class='colx-sort" + (s.key === key && s.dir !== -1 ? ' on' : '') + "' title='Crescente'" + actAttr('click', 'schedColSort', [key, 1]) + ">↑</button>" +
+        "<button class='colx-sort" + (s.key === key && s.dir === -1 ? ' on' : '') + "' title='Decrescente'" + actAttr('click', 'schedColSort', [key, -1]) + ">↓</button></div>";
     }
-    function chk(k, label) { return "<label class='colf-opt'><input type='checkbox'" + (_semF[k] ? ' checked' : '') + " onchange=\"semToggle('" + k + "',this.checked)\"><span class='colf-code'>" + label + "</span></label>"; }
+    function chk(k, label) { return "<label class='colf-opt'><input type='checkbox'" + (_semF[k] ? ' checked' : '') + actAttr('change', 'semToggle', [k, '@checked']) + "><span class='colf-code'>" + label + "</span></label>"; }
     var inner =
       "<div class='colf-h'>SEM · <b>Ordina / filtra</b></div>" +
       "<div class='colx-grp'>Ordina per</div>" +
@@ -271,8 +271,8 @@
         chk('overtime', 'Con straordinari') + chk('above', 'Sopra contratto') + chk('under', 'Sotto contratto') +
         chk('absences', 'Con assenze') + chk('conflicts', 'Con conflitti') +
       "</div>" +
-      "<div class='colf-foot'><button class='colf-clear' onclick='semFilterClear()'>Azzera</button>" +
-      "<button class='colf-apply' onclick='window._colfExtClose()'>Chiudi</button></div>";
+      "<div class='colf-foot'><button class='colf-clear'" + actAttr('click', 'semFilterClear') + ">Azzera</button>" +
+      "<button class='colf-apply'" + actAttr('click', '_colfExtClose') + ">Chiudi</button></div>";
     _open('sem', inner, btn);
   };
   window.semToggle = function (k, on) { if (on) _semF[k] = 1; else delete _semF[k]; _save(LS_SEM, _semF); _rerender(); };

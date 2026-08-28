@@ -158,7 +158,7 @@
     if (!td) { if (typeof renderGrid === 'function') renderGrid(); return; }
     var code = getCode(id, d), cls = codeCls(code), cst = getCLS(cls);
     td.innerHTML = code
-      ? '<div class="shift-card" draggable="true" ondragstart="boardDragStart(event,' + id + ',' + d + ')" ondragend="boardDragEnd()" style="background:' + cst.bg + ';color:' + cst.fg + ';border-color:' + cst.br + '" title="' + esc(codeLabel(code)) + '">' + esc(code) + '</div>'
+      ? '<div class="shift-card" draggable="true" data-id="' + id + '" data-d="' + d + '" data-act-dragstart="card" data-act-dragend="card" style="background:' + cst.bg + ';color:' + cst.fg + ';border-color:' + cst.br + '" title="' + esc(codeLabel(code)) + '">' + esc(code) + '</div>'
       : '';
     // Live recalculation (spec §15/§19): the SEM total for this row and the
     // footer KPIs must update on every single-cell change without a re-render.
@@ -281,15 +281,15 @@
         h += '<button class="cellpop-code' + (c === cur ? ' sel' : '') + '"' +
           ' style="background:' + st.bg + ';color:' + st.fg + ';border-color:' + st.br + '"' +
           ' title="' + esc(codeLabel(c)) + ' — click destro: usa come pennello"' +
-          ' onclick="cellPopPick(' + id + ',' + d + ',\'' + c + '\')"' +
-          ' oncontextmenu="cellPopBrush(event,\'' + c + '\')">' + esc(c) + '</button>';
+          actAttr('click', 'cellPopPick', [id, d, c]) +
+          actAttr('contextmenu', 'cellPopBrush', ['@event', c]) + '>' + esc(c) + '</button>';
       });
     });
     h += '</div>';
     h += '<div class="cellpop-foot">' +
-      '<button class="cp-clear" onclick="cellPopPick(' + id + ',' + d + ',\'\')">✕ Vuoto</button>' +
-      '<button onclick="closeCellPop();spOpenPanel(' + id + ',' + d + ')">Dettagli…</button>' +
-      (cur ? '<button onclick="cellPopBrush(event,\'' + cur + '\')">🖌 Pennello</button>' : '') +
+      '<button class="cp-clear"' + actAttr('click', 'cellPopPick', [id, d, '']) + '>✕ Vuoto</button>' +
+      '<button data-id="' + id + '" data-d="' + d + '" data-act-click="cellPopDetails">Dettagli…</button>' +
+      (cur ? '<button' + actAttr('click', 'cellPopBrush', ['@event', cur]) + '>🖌 Pennello</button>' : '') +
       '</div>';
     pop.innerHTML = h;
     document.body.appendChild(pop);
@@ -322,6 +322,15 @@
     if (p) p.remove();
   };
 
+  // Delegated action for the popover "Dettagli…" button (former inline
+  // onclick="closeCellPop();spOpenPanel(id,d)" — two calls, so a named handler).
+  if (typeof TurniActions !== 'undefined') {
+    TurniActions.on('click', 'cellPopDetails', function (e, el) {
+      closeCellPop();
+      spOpenPanel(+el.dataset.id, +el.dataset.d);
+    });
+  }
+
   // Dismiss the popover on outside click / scroll.
   document.addEventListener('mousedown', function (e) {
     var p = document.getElementById('cellPop');
@@ -344,7 +353,7 @@
     d.id = 'fcDrawer';
     d.className = 'fc-drawer';
     d.innerHTML =
-      '<div class="fc-head"><b>📊 Forecast &amp; Copertura</b><button class="fc-x" onclick="toggleForecastPanel()" title="Chiudi">✕</button></div>' +
+      '<div class="fc-head"><b>📊 Forecast &amp; Copertura</b><button class="fc-x" ' + actAttr('click','toggleForecastPanel') + ' title="Chiudi">✕</button></div>' +
       '<div class="fc-body" id="fcBody"></div>';
     document.body.appendChild(d);
   }
@@ -434,8 +443,8 @@
     }
 
     h += '<div class="fc-actions">' +
-      '<button class="btn ghost sm" onclick="toggleAssistant()">🤖 Suggerimenti</button>' +
-      (typeof openGenerator === 'function' ? '<button class="btn btn-primary sm adminonly" onclick="openGenerator()">⚙ Genera</button>' : '') +
+      '<button class="btn ghost sm" ' + actAttr('click','toggleAssistant') + '>🤖 Suggerimenti</button>' +
+      (typeof openGenerator === 'function' ? '<button class="btn btn-primary sm adminonly" ' + actAttr('click','openGenerator') + '>⚙ Genera</button>' : '') +
       '</div>';
 
     body.innerHTML = h;

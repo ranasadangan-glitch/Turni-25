@@ -72,19 +72,19 @@
     if (!_built) {
       sec.innerHTML =
         "<div class='page-head'><div class='page-title'>📊 Forecast · Dashboard</div>" +
-        "<div class='fc2-tools'><button class='btn ghost sm' onclick='fpExportCsv()'>⬇ Esporta Excel</button>" +
-        "<button class='btn ghost sm' onclick='window.print()'>🖨 PDF / Stampa</button></div></div>" +
+        "<div class='fc2-tools'><button class='btn ghost sm' data-act-click='call' data-call='fpExportCsv'>⬇ Esporta Excel</button>" +
+        "<button class='btn ghost sm' data-act-click='call' data-call='print'>🖨 PDF / Stampa</button></div></div>" +
         "<div class='fc3-tabs'>" +
-        "<button data-t='daily' onclick=\"fpTab('daily')\">Giornaliero</button>" +
-        "<button data-t='weekly' class='on' onclick=\"fpTab('weekly')\">Settimanale</button>" +
-        "<button data-t='monthly' onclick=\"fpTab('monthly')\">Mensile</button></div>" +
+        "<button data-t='daily' data-act-click='call' data-call='fpTab' data-args='[&quot;daily&quot;]'>Giornaliero</button>" +
+        "<button data-t='weekly' class='on' data-act-click='call' data-call='fpTab' data-args='[&quot;weekly&quot;]'>Settimanale</button>" +
+        "<button data-t='monthly' data-act-click='call' data-call='fpTab' data-args='[&quot;monthly&quot;]'>Mensile</button></div>" +
         "<div class='fc2-filters'>" +
-        "<label class='fp-fl'>Filiale<select id='fpStation' class='sel' onchange='fpStationChange(this.value)'></select></label>" +
-        "<label class='fp-fl'>Servizio<select id='fpService' class='sel' onchange='refreshForecastPage()'><option value=''>Tutti</option></select></label>" +
-        "<label class='fp-fl'>Mese<select id='fpMonth' class='sel' onchange='fpMonthYear()'></select></label>" +
-        "<label class='fp-fl'>Anno<select id='fpYear' class='sel' onchange='fpMonthYear()'></select></label>" +
-        "<label class='fp-fl' id='fpWeekWrap'>Settimana<select id='fpWeek' class='sel' onchange='fpSelWeek(this.value)'></select></label>" +
-        "<label class='fp-fl' id='fpDayWrap' style='display:none'>Giorno<select id='fpDay' class='sel' onchange='fpSelDay(this.value)'></select></label>" +
+        "<label class='fp-fl'>Filiale<select id='fpStation' class='sel' data-act-change='call' data-call='fpStationChange' data-args='[&quot;@value&quot;]'></select></label>" +
+        "<label class='fp-fl'>Servizio<select id='fpService' class='sel' data-act-change='call' data-call='refreshForecastPage'><option value=''>Tutti</option></select></label>" +
+        "<label class='fp-fl'>Mese<select id='fpMonth' class='sel' data-act-change='call' data-call='fpMonthYear'></select></label>" +
+        "<label class='fp-fl'>Anno<select id='fpYear' class='sel' data-act-change='call' data-call='fpMonthYear'></select></label>" +
+        "<label class='fp-fl' id='fpWeekWrap'>Settimana<select id='fpWeek' class='sel' data-act-change='call' data-call='fpSelWeek' data-args='[&quot;@value&quot;]'></select></label>" +
+        "<label class='fp-fl' id='fpDayWrap' style='display:none'>Giorno<select id='fpDay' class='sel' data-act-change='call' data-call='fpSelDay' data-args='[&quot;@value&quot;]'></select></label>" +
         "</div>" +
         "<div class='ops-kpi' id='fpKpi' style='border:none;padding:0;margin-bottom:12px'></div>" +
         "<div id='fpView'></div>" +
@@ -153,7 +153,7 @@
     var ed = _edited[s.key + '|' + day] ? ' edited' : '';
     if (!_canEdit()) return "<div class='fc3-c fc3-fc" + ed + "'>" + value + "</div>";
     return "<div class='fc3-c fc3-fc" + ed + "'><input class='fc3-fin' type='number' min='0' inputmode='numeric' value='" + value +
-      "' onkeydown='fpFcKey(event)' onchange='fpFcSet(\"" + s.key + "\"," + day + ",this.value)'></div>";
+      "'" + actAttr('keydown','fpFcKey',['@event']) + actAttr('change','fpFcSet',[s.key,day,'@value']) + "></div>";
   }
   window.fpFcKey = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); ev.target.blur(); } };
   window.fpFcSet = function (svcKey, day, v) {

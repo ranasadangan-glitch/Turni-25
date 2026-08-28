@@ -109,8 +109,8 @@
   window.setCfgTab = function (t) {
     if (typeof cfgTab !== 'undefined') { try { cfgTab = t; } catch (e) {} }
     document.querySelectorAll('#cfgTabs button').forEach((b) => {
-      const oc = b.getAttribute('onclick') || '';
-      b.classList.toggle('on', oc.indexOf("'" + t + "'") >= 0);
+      const oc = b.getAttribute('data-args') || b.getAttribute('onclick') || '';
+      b.classList.toggle('on', oc.indexOf('"' + t + '"') >= 0 || oc.indexOf("'" + t + "'") >= 0);
     });
     const st = document.getElementById('cfgSectionTitle');
     if (st) st.textContent = CFG_TAB_TITLES[t] || t;
@@ -173,7 +173,7 @@
     body.innerHTML =
       "<div class='set-hub-h'>Configurazione della piattaforma. Seleziona un'area da gestire.</div>" +
       "<div class='set-hub'>" + cards.map(function (c) {
-        return "<button class='set-card' onclick=\"go('" + c.go + "')\"><span class='set-ic'>" + c.ic + "</span>" +
+        return "<button class='set-card'" + actAttr('click', 'go', [c.go]) + "><span class='set-ic'>" + c.ic + "</span>" +
           "<span class='set-nm'>" + esc(c.t) + "</span><span class='set-d'>" + esc(c.d) + "</span></button>";
       }).join('') + "</div>";
   }
@@ -189,18 +189,18 @@
   window.cfgMgrFilter = function (k, fid, v) { _ms(k).filter[fid] = v; renderCfgTab(cfgTab); };
 
   function _statusChip(st) { var on = st !== 'inactive'; return "<span class='mgr-status " + (on ? 'on' : 'off') + "'>" + (on ? 'Attivo' : 'Inattivo') + "</span>"; }
-  function _toolbar(k, stats, filters, addLabel, addFn) {
+  function _toolbar(k, stats, filters, addLabel, addFn, addArgs) {
     var s = _ms(k);
     var h = "<div class='mgr-stats'>" + stats.map(function (x) { return "<div class='mgr-stat " + (x.cls || '') + "'><b>" + x.v + "</b><span>" + esc(x.l) + "</span></div>"; }).join('') + "</div>";
-    h += "<div class='mgr-toolbar'><div class='mgr-search'><span>🔍</span><input id='mgrSearch_" + k + "' value=\"" + esc(s.q) + "\" placeholder='Cerca…' oninput='cfgMgrSearch(\"" + k + "\",this.value)'></div>";
+    h += "<div class='mgr-toolbar'><div class='mgr-search'><span>🔍</span><input id='mgrSearch_" + k + "' value=\"" + esc(s.q) + "\" placeholder='Cerca…'" + actAttr('input', 'cfgMgrSearch', [k, '@value']) + "></div>";
     (filters || []).forEach(function (f) {
-      h += "<select class='sel mgr-fsel' onchange='cfgMgrFilter(\"" + k + "\",\"" + f.id + "\",this.value)'><option value=''>" + esc(f.label) + "</option>" +
+      h += "<select class='sel mgr-fsel'" + actAttr('change', 'cfgMgrFilter', [k, f.id, '@value']) + "><option value=''>" + esc(f.label) + "</option>" +
         f.opts.map(function (o) { return "<option value='" + esc(o.v) + "'" + (s.filter[f.id] === o.v ? ' selected' : '') + '>' + esc(o.l) + '</option>'; }).join('') + "</select>";
     });
     h += "<span class='mgr-spacer'></span><div class='mgr-views'>" +
-      "<button class='" + (s.view === 'table' ? 'on' : '') + "' onclick='cfgMgrView(\"" + k + "\",\"table\")' title='Tabella'>☰</button>" +
-      "<button class='" + (s.view === 'card' ? 'on' : '') + "' onclick='cfgMgrView(\"" + k + "\",\"card\")' title='Card'>▦</button></div>";
-    if (addFn) h += "<button class='btn btn-primary sm' onclick='" + addFn + "'>+ " + esc(addLabel) + "</button>";
+      "<button class='" + (s.view === 'table' ? 'on' : '') + "'" + actAttr('click', 'cfgMgrView', [k, 'table']) + " title='Tabella'>☰</button>" +
+      "<button class='" + (s.view === 'card' ? 'on' : '') + "'" + actAttr('click', 'cfgMgrView', [k, 'card']) + " title='Card'>▦</button></div>";
+    if (addFn) h += "<button class='btn btn-primary sm'" + actAttr('click', addFn, addArgs) + ">+ " + esc(addLabel) + "</button>";
     h += "</div>";
     return h;
   }
@@ -222,7 +222,7 @@
       return "<div class='mgr-cards'>" + list.map(function (x) { return "<div class='mgr-card'>" + cardOf(x.it) + "<div class='mgr-card-act'>" + actions(x.it, x.idx) + "</div></div>"; }).join('') + "</div>";
     }
     var h = "<div class='mgr-tblwrap'><table class='mgr-tbl'><thead><tr>";
-    columns.forEach(function (c, i) { h += "<th" + (c.sortVal ? " class='sortable' onclick='cfgMgrSort(\"" + k + "\"," + i + ")'" : '') + '>' + esc(c.label) + (s.sort === i ? (s.dir > 0 ? ' ▲' : ' ▼') : '') + '</th>'; });
+    columns.forEach(function (c, i) { h += "<th" + (c.sortVal ? " class='sortable'" + actAttr('click', 'cfgMgrSort', [k, i]) : '') + '>' + esc(c.label) + (s.sort === i ? (s.dir > 0 ? ' ▲' : ' ▼') : '') + '</th>'; });
     h += "<th></th></tr></thead><tbody>";
     if (!list.length) h += "<tr><td colspan='" + (columns.length + 1) + "' class='mgr-empty'>Nessun risultato.</td></tr>";
     list.forEach(function (x) { h += '<tr>'; columns.forEach(function (c) { h += '<td>' + c.val(x.it) + '</td>'; }); h += "<td class='mgr-act'>" + actions(x.it, x.idx) + '</td></tr>'; });
@@ -250,9 +250,9 @@
       { label: 'Stato', val: function (it) { return _statusChip(it.status); }, sortVal: function (it) { return it.status; } }
     ];
     var actions = function (it) {
-      return "<button class='btn ghost sm' onclick='cfgEditFil(\"" + esc(it.code) + "\")' title='Modifica'>✏️</button> " +
-        "<button class='btn ghost sm' onclick='cfgToggleFil(\"" + esc(it.code) + "\")' title='Attiva/Disattiva'>" + (it.status === 'inactive' ? '▶' : '⏸') + "</button> " +
-        "<button class='btn warn sm' onclick='cfgDelFil(\"" + esc(it.code) + "\")' title='Elimina'>🗑</button>";
+      return "<button class='btn ghost sm' " + actAttr('click','cfgEditFil',[it.code]) + " title='Modifica'>✏️</button> " +
+        "<button class='btn ghost sm' " + actAttr('click','cfgToggleFil',[it.code]) + " title='Attiva/Disattiva'>" + (it.status === 'inactive' ? '▶' : '⏸') + "</button> " +
+        "<button class='btn warn sm' " + actAttr('click','cfgDelFil',[it.code]) + " title='Elimina'>🗑</button>";
     };
     var card = function (it) {
       return "<div class='mgr-card-h'><b>" + esc(it.code) + "</b>" + _statusChip(it.status) + "</div>" +
@@ -261,7 +261,7 @@
         (it.notes ? "<div class='mgr-card-note'>" + esc(it.notes) + "</div>" : '');
     };
     var list = _applyList('filiali', items, searchOf, filters);
-    body.innerHTML = _filForm() + _toolbar('filiali', stats, filters, 'Filiale', 'cfgEditFil("")') +
+    body.innerHTML = _filForm() + _toolbar('filiali', stats, filters, 'Filiale', 'cfgEditFil', ['']) +
       _view('filiali', list, columns, card, actions);
   }
   function _filForm() {
@@ -278,7 +278,7 @@
       "<div><label class='lbl'>Responsabile</label><input id='filManager' class='inp' value=\"" + esc(d.manager || '') + "\"></div>" +
       "<div><label class='lbl'>Stato</label><select id='filStatus' class='sel'><option value='active'" + ((d.status || 'active') !== 'inactive' ? ' selected' : '') + ">Attivo</option><option value='inactive'" + (d.status === 'inactive' ? ' selected' : '') + ">Inattivo</option></select></div>" +
       "<div style='grid-column:1/-1'><label class='lbl'>Note</label><input id='filNotes' class='inp' value=\"" + esc(d.notes || '') + "\"></div>" +
-      "</div><div style='margin-top:10px'><button class='btn btn-primary' onclick='cfgSaveFil()'>💾 Salva</button> <button class='btn btn-ghost' onclick='cfgCancelEdit(\"filiali\")'>Annulla</button></div></div>";
+      "</div><div style='margin-top:10px'><button class='btn btn-primary'" + actAttr('click','cfgSaveFil') + ">💾 Salva</button> <button class='btn btn-ghost'" + actAttr('click','cfgCancelEdit',['filiali']) + ">Annulla</button></div></div>";
   }
   window.cfgEditFil = function (code) { cfgEdit.filiali = code; renderCfgTab(cfgTab); };
   window.cfgSaveFil = function () {
@@ -375,9 +375,9 @@
       { label: 'Stato', val: function (c) { return _statusChip(_codeMeta(c).status); }, sortVal: function (c) { return _codeMeta(c).status; } }
     ];
     var actions = function (c, i) {
-      return "<button class='btn ghost sm' onclick='cfgEditCode(" + i + ")'>✏️</button> " +
-        "<button class='btn ghost sm' onclick='cfgToggleCode(" + i + ")' title='Attiva/Disattiva'>" + (_codeMeta(c).status === 'inactive' ? '▶' : '⏸') + "</button> " +
-        "<button class='btn warn sm' onclick='cfgDelCode(" + i + ")'>🗑</button>";
+      return "<button class='btn ghost sm'" + actAttr('click','cfgEditCode',[i]) + ">✏️</button> " +
+        "<button class='btn ghost sm'" + actAttr('click','cfgToggleCode',[i]) + " title='Attiva/Disattiva'>" + (_codeMeta(c).status === 'inactive' ? '▶' : '⏸') + "</button> " +
+        "<button class='btn warn sm'" + actAttr('click','cfgDelCode',[i]) + ">🗑</button>";
     };
     var card = function (c) {
       var m = _codeMeta(c);
@@ -387,7 +387,7 @@
         "<div class='mgr-card-flags'>" + (m.paid ? "<span>💶 Retribuito</span>" : "") + (m.countsAsWork ? "<span>⏱ Ore</span>" : "") + (m.requiresApproval ? "<span>✔ Approvazione</span>" : "") + "</div>";
     };
     var list = _applyList('codes', codes, searchOf, filters);
-    body.innerHTML = _codeForm() + _toolbar('codes', stats, filters, 'Codice', 'cfgEditCode(-1)') +
+    body.innerHTML = _codeForm() + _toolbar('codes', stats, filters, 'Codice', 'cfgEditCode', [-1]) +
       _view('codes', list, columns, card, actions);
   }
   function _codeForm() {
@@ -405,7 +405,7 @@
       "<div><label class='lbl'>Categoria</label><select id='cfgCodeCat' class='sel'>" + Object.keys(CAT_L).map(function (k) { return "<option value='" + k + "'" + (m.category === k ? ' selected' : '') + '>' + CAT_L[k] + '</option>'; }).join('') + "</select></div>" +
       "<div><label class='lbl'>Stato</label><select id='cfgCodeStatus' class='sel'><option value='active'" + (m.status !== 'inactive' ? ' selected' : '') + ">Attivo</option><option value='inactive'" + (m.status === 'inactive' ? ' selected' : '') + ">Inattivo</option></select></div>" +
       "<div class='mgr-checks' style='grid-column:1/-1'>" + chk('cfgCodePaid', m.paid, 'Retribuito') + chk('cfgCodeWork', m.countsAsWork, 'Conta come ore lavorate') + chk('cfgCodeAppr', m.requiresApproval, 'Richiede approvazione') + "</div>" +
-      "</div><div style='margin-top:10px'><button class='btn btn-primary' onclick='cfgSaveCode()'>💾 Salva</button> <button class='btn btn-ghost' onclick='cfgCancelEdit(\"codes\")'>Annulla</button></div></div>";
+      "</div><div style='margin-top:10px'><button class='btn btn-primary'" + actAttr('click','cfgSaveCode') + ">💾 Salva</button> <button class='btn btn-ghost'" + actAttr('click','cfgCancelEdit',['codes']) + ">Annulla</button></div></div>";
   }
   window.cfgToggleCode = function (i) { var c = CFG().codes[i]; var m = _codeMeta(c); c.status = (m.status === 'inactive') ? 'active' : 'inactive'; cfgPersist('Stato codice aggiornato'); renderCfgTab(cfgTab); };
   window.cfgEditCode = function (i) { cfgEdit.codes = i; renderCfgTab(cfgTab); };
@@ -448,7 +448,7 @@
     sel = sel || [];
     return "<div class='chipsel' id='cfgCtrDays'>" + (typeof WEEKDAYS !== 'undefined' ? WEEKDAYS : [])
       .map((w) => "<button type='button' data-d='" + w.n + "' class='" + (sel.includes(w.n) ? 'on' : '') +
-        "' onclick='this.classList.toggle(\"on\")'>" + esc(w.l) + "</button>").join('') + "</div>";
+        "' " + actAttr('click','_toggleOn') + ">" + esc(w.l) + "</button>").join('') + "</div>";
   }
   // Contracts are defined by WORKING DAYS and HR rules, not hours:
   //   type       — Full time / Part time / Verticale
@@ -464,11 +464,11 @@
   // contract types + work patterns + working days + settings (Tipi & Giorni),
   // the shift/contract rules (Regole turni) and the expiry monitor (Scadenze).
   function _contractsSubnav(active) {
-    const b = (k, label, oc) => "<button class='" + (active === k ? 'on' : '') + "' onclick='" + oc + "'>" + label + "</button>";
+    const b = (k, label, fn, args) => "<button class='" + (active === k ? 'on' : '') + "'" + actAttr('click', fn, args) + ">" + label + "</button>";
     return "<div class='seg' id='contractsSubnav' style='margin-bottom:14px'>" +
-      b('types', 'Tipi &amp; Giorni', 'setCfgTab(\"contracts\")') +
-      b('rules', 'Regole turni', 'setCfgTab(\"rules\")') +
-      b('expiry', 'Scadenze', 'showSchedView(\"contr\",\"Scadenze contratti\")') +
+      b('types', 'Tipi &amp; Giorni', 'setCfgTab', ['contracts']) +
+      b('rules', 'Regole turni', 'setCfgTab', ['rules']) +
+      b('expiry', 'Scadenze', 'showSchedView', ['contr', 'Scadenze contratti']) +
       "</div>";
   }
 
@@ -482,8 +482,8 @@
       "<td style='text-align:center'>" + ctrRest(c) + "</td>" +
       "<td style='font-size:.78rem'>" + (c.defDays || []).map((n) => ((typeof WEEKDAYS !== 'undefined' && WEEKDAYS.find((w) => w.n === n)) || {}).l || '').join(' ') + "</td>" +
       "<td style='text-align:right;white-space:nowrap'>" +
-      "<button class='btn ghost sm' onclick='cfgEditContract(" + i + ")'>✏️</button> " +
-      "<button class='btn warn sm' onclick='cfgDelContract(" + i + ")'>🗑</button></td></tr>"
+      "<button class='btn ghost sm'" + actAttr('click','cfgEditContract',[i]) + ">✏️</button> " +
+      "<button class='btn warn sm'" + actAttr('click','cfgDelContract',[i]) + ">🗑</button></td></tr>"
     ).join('') || "<tr><td colspan='7' style='color:var(--muted)'>Nessun contratto.</td></tr>";
     body.innerHTML =
       _contractsSubnav('types') +
@@ -497,8 +497,8 @@
       "<div><label class='lbl'>Giorni/sett.</label><input id='cfgCtrWork' class='inp' type='number' min='0' max='7' style='max-width:90px' value='" + (cur ? ctrWork(cur) : 5) + "'></div>" +
       "<div><label class='lbl'>Riposo consec.</label><input id='cfgCtrRest' class='inp' type='number' min='0' max='7' style='max-width:90px' value='" + (cur ? ctrRest(cur) : 2) + "'></div>" +
       "<div><label class='lbl'>Giorni consentiti</label>" + dayPickerHtml(cur ? cur.defDays : [1, 2, 3, 4, 5]) + "</div>" +
-      "<button class='btn btn-primary' onclick='cfgSaveContract()'>💾 Salva</button>" +
-      (cur ? "<button class='btn btn-ghost' onclick='cfgCancelEdit(\"contracts\")'>Annulla</button>" : '') +
+      "<button class='btn btn-primary'" + actAttr('click','cfgSaveContract') + ">💾 Salva</button>" +
+      (cur ? "<button class='btn btn-ghost'" + actAttr('click','cfgCancelEdit',['contracts']) + ">Annulla</button>" : '') +
       "</div></div>" +
       "<table style='width:100%;border-collapse:collapse;font-size:.85rem'>" +
       "<thead><tr><th style='text-align:left'>Codice</th><th style='text-align:left'>Descrizione</th><th style='text-align:left'>Tipo</th><th>Giorni/sett.</th><th>Riposo</th><th style='text-align:left'>Giorni consentiti</th><th></th></tr></thead><tbody>" + rows + "</tbody></table>";
@@ -562,9 +562,9 @@
       { label: 'Stato', val: function (s) { return _statusChip(_svcMeta(s).status); }, sortVal: function (s) { return _svcMeta(s).status; } }
     ];
     var actions = function (s, i) {
-      return "<button class='btn ghost sm' onclick='cfgEditService(" + i + ")'>✏️</button> " +
-        "<button class='btn ghost sm' onclick='cfgToggleService(" + i + ")' title='Attiva/Disattiva'>" + (_svcMeta(s).status === 'inactive' ? '▶' : '⏸') + "</button> " +
-        "<button class='btn warn sm' onclick='cfgDelService(" + i + ")'>🗑</button>";
+      return "<button class='btn ghost sm'" + actAttr('click','cfgEditService',[i]) + ">✏️</button> " +
+        "<button class='btn ghost sm'" + actAttr('click','cfgToggleService',[i]) + " title='Attiva/Disattiva'>" + (_svcMeta(s).status === 'inactive' ? '▶' : '⏸') + "</button> " +
+        "<button class='btn warn sm'" + actAttr('click','cfgDelService',[i]) + ">🗑</button>";
     };
     var card = function (s) {
       var m = _svcMeta(s);
@@ -574,7 +574,7 @@
         "<div class='mgr-card-note mgr-codes'>" + (s.count || []).map(esc).join(', ') + "</div>";
     };
     var list = _applyList('services', list0, searchOf, filters);
-    body.innerHTML = _svcForm() + _toolbar('services', stats, filters, 'Servizio', 'cfgEditService(-1)') +
+    body.innerHTML = _svcForm() + _toolbar('services', stats, filters, 'Servizio', 'cfgEditService', [-1]) +
       _view('services', list, columns, card, actions);
   }
   function _svcForm() {
@@ -594,7 +594,7 @@
       "<div><label class='lbl'>Stato</label><select id='cfgSvcStatus' class='sel'><option value='active'" + (m.status !== 'inactive' ? ' selected' : '') + ">Attivo</option><option value='inactive'" + (m.status === 'inactive' ? ' selected' : '') + ">Inattivo</option></select></div>" +
       "<div><label class='lbl'>Codici conteggiati</label><select id='cfgSvcCount' class='sel w-full' multiple size='5'>" + multiOpts(allCodeList(), cur.count || []) + "</select></div>" +
       "<div><label class='lbl'>Filiali <small class='text-muted'>(vuoto = tutte)</small></label><select id='cfgSvcFil' class='sel w-full' multiple size='5'>" + multiOpts(filiali(), cur.filiali || []) + "</select></div>" +
-      "</div><div style='margin-top:10px'><button class='btn btn-primary' onclick='cfgSaveService()'>💾 Salva</button> <button class='btn btn-ghost' onclick='cfgCancelEdit(\"services\")'>Annulla</button></div></div>";
+      "</div><div style='margin-top:10px'><button class='btn btn-primary'" + actAttr('click','cfgSaveService') + ">💾 Salva</button> <button class='btn btn-ghost'" + actAttr('click','cfgCancelEdit',['services']) + ">Annulla</button></div></div>";
   }
   window.cfgToggleService = function (i) { var s = services()[i]; s.status = (_svcMeta(s).status === 'inactive') ? 'active' : 'inactive'; cfgPersist('Stato servizio aggiornato'); renderCfgTab(cfgTab); };
   function splitList(v) { return (v || '').split(',').map((s) => s.trim()).filter(Boolean); }
@@ -718,14 +718,14 @@
       "<div class='section-head'><span class='section-title'>📈 Forecast — " + esc(fcMonth) + " · " + esc(curBranch) + "</span>" +
       "<span class='text-xs text-muted'>Settimane da domenica a sabato</span></div>" +
       "<div style='display:flex;gap:8px;align-items:flex-end;margin:10px 0 16px;flex-wrap:wrap'>" +
-      "<div><label class='lbl'>Filiale</label><select id='cfgFcBranch' class='sel' onchange='cfgFcBranchPick(this.value)'>" + branchOpts + "</select></div>" +
-      "<div><label class='lbl'>Mese</label><input id='cfgFcMonth' class='inp' type='month' value='" + esc(fcMonth) + "' onchange='cfgFcMonthPick(this.value)' style='width:150px'></div>" +
-      "<div><label class='lbl'>Servizio</label><select id='cfgFcSvc' class='sel' onchange='cfgFcPick(this.value)'>" + opts + "</select></div>" +
-      "<button class='btn btn-primary' onclick='cfgSaveForecast()'>💾 Salva forecast</button>" +
+      "<div><label class='lbl'>Filiale</label><select id='cfgFcBranch' class='sel'" + actAttr('change','cfgFcBranchPick',['@value']) + ">" + branchOpts + "</select></div>" +
+      "<div><label class='lbl'>Mese</label><input id='cfgFcMonth' class='inp' type='month' value='" + esc(fcMonth) + "'" + actAttr('change','cfgFcMonthPick',['@value']) + " style='width:150px'></div>" +
+      "<div><label class='lbl'>Servizio</label><select id='cfgFcSvc' class='sel'" + actAttr('change','cfgFcPick',['@value']) + ">" + opts + "</select></div>" +
+      "<button class='btn btn-primary'" + actAttr('click','cfgSaveForecast') + ">💾 Salva forecast</button>" +
       "<div style='flex:1'></div>" +
-      "<button class='btn btn-ghost sm' onclick='cfgExportForecast()'>⬇ Esporta Excel</button>" +
+      "<button class='btn btn-ghost sm'" + actAttr('click','cfgExportForecast') + ">⬇ Esporta Excel</button>" +
       "<label class='btn btn-ghost sm' style='cursor:pointer;margin:0'>⬆ Importa Excel" +
-      "<input type='file' accept='.xlsx,.xls' style='display:none' onchange='cfgImportForecast(event)'></label>" +
+      "<input type='file' accept='.xlsx,.xls' style='display:none'" + actAttr('change','cfgImportForecast',['@event']) + "></label>" +
       "</div>" +
       (isOther ? "<p class='text-xs' style='color:var(--warn);margin-bottom:10px'>⚠️ Stai modificando un mese diverso da quello aperto nel planner (" + esc(YM) + ").</p>" : '') +
       blocks +
@@ -795,12 +795,12 @@
     catch (e) { body.innerHTML = "<div class='text-muted' style='padding:16px'>Errore: " + esc(e.message) + "</div>"; return; }
     const rows = _rules.map((r) =>
       "<tr>" +
-      "<td style='text-align:center'><input type='checkbox' " + (r.enabled ? 'checked' : '') + " onchange='cfgToggleRule(" + r.id + ",this.checked)'></td>" +
+      "<td style='text-align:center'><input type='checkbox' " + (r.enabled ? 'checked' : '') + actAttr('change','cfgToggleRule',[r.id,'@checked']) + "></td>" +
       "<td><b>" + esc(r.name) + "</b>" + (r.builtin ? '' : " <span class='badge b-pri' style='font-size:.6rem'>custom</span>") + "<br><span class='text-xs text-muted'>" + esc(r.description || '') + "</span></td>" +
       "<td><span class='badge " + (r.action === 'skip' ? 'b-bad' : r.action === 'require' ? 'b-warn' : 'b-ok') + "'>" + (RULE_ACTIONS[r.action] || r.action) + "</span></td>" +
-      "<td style='text-align:center'><input type='number' value='" + r.priority + "' style='width:60px;padding:4px' class='inp' onchange='cfgSetRulePriority(" + r.id + ",this.value)'></td>" +
+      "<td style='text-align:center'><input type='number' value='" + r.priority + "' style='width:60px;padding:4px' class='inp'" + actAttr('change','cfgSetRulePriority',[r.id,'@value']) + "></td>" +
       "<td style='font-size:.72rem;color:var(--muted)'>" + esc(JSON.stringify(r.params || {})) + "</td>" +
-      "<td style='text-align:right'>" + (r.builtin ? '' : "<button class='btn warn sm' onclick='cfgDeleteRule(" + r.id + ")'>🗑</button>") + "</td>" +
+      "<td style='text-align:right'>" + (r.builtin ? '' : "<button class='btn warn sm'" + actAttr('click','cfgDeleteRule',[r.id]) + ">🗑</button>") + "</td>" +
       "</tr>").join('');
     body.innerHTML =
       _contractsSubnav('rules') +
@@ -817,7 +817,7 @@
       "<div><label class='lbl'>Tipo</label><select id='ruAction' class='sel w-full'><option value='skip'>Escludi</option><option value='require'>Richiedi</option><option value='score'>Punteggio</option></select></div>" +
       "<div><label class='lbl'>Priorità</label><input id='ruPriority' class='inp' type='number' value='100'></div>" +
       "<div style='grid-column:1/-1'><label class='lbl'>Parametri (JSON)</label><input id='ruParams' class='inp' value='{}'></div>" +
-      "</div><div style='margin-top:10px'><button class='btn btn-primary' onclick='cfgCreateRule()'>Crea regola</button></div></div>";
+      "</div><div style='margin-top:10px'><button class='btn btn-primary'" + actAttr('click','cfgCreateRule') + ">Crea regola</button></div></div>";
   }
   window.cfgToggleRule = async function (id, enabled) {
     try { await TurniApi.updateSchedulerRule(id, { enabled }); if (typeof invalidateGenRules === 'function') invalidateGenRules(); toast('Regola aggiornata', 'ok'); }
@@ -850,19 +850,19 @@
       "<div class='section-head'><span class='section-title'>👥 Dipendenti</span></div>" +
       "<p class='text-xs text-muted' style='margin-bottom:10px'>Esporta l'anagrafica completa, oppure importa da un file Excel. Usa il modello per conoscere le colonne attese.</p>" +
       "<div style='display:flex;gap:8px;flex-wrap:wrap'>" +
-      "<button class='btn btn-ghost sm' onclick='cfgExportEmployees()'>⬇ Esporta Excel</button>" +
+      "<button class='btn btn-ghost sm'" + actAttr('click','cfgExportEmployees') + ">⬇ Esporta Excel</button>" +
       "<label class='btn btn-ghost sm' style='cursor:pointer;margin:0'>⬆ Importa Excel" +
-      "<input type='file' accept='.xlsx,.xls' style='display:none' onchange='cfgImportEmployees(event)'></label>" +
-      "<button class='btn btn-ghost sm' onclick='cfgTemplate(\"employees\")'>📄 Modello</button>" +
+      "<input type='file' accept='.xlsx,.xls' style='display:none'" + actAttr('change','cfgImportEmployees',['@event']) + "></label>" +
+      "<button class='btn btn-ghost sm'" + actAttr('click','cfgTemplate',['employees']) + ">📄 Modello</button>" +
       "</div></div>" +
 
       "<div class='card card-pad' style='max-width:760px'>" +
       "<div class='section-head'><span class='section-title'>📈 Forecast — " + esc(YM) + " · " + esc(cfgBranch()) + "</span></div>" +
       "<p class='text-xs text-muted' style='margin-bottom:10px'>Griglia mensile: una riga per servizio, una colonna per giorno. Esporta, modifica in Excel e reimporta.</p>" +
       "<div style='display:flex;gap:8px;flex-wrap:wrap'>" +
-      "<button class='btn btn-ghost sm' onclick='cfgExportForecast()'>⬇ Esporta Excel</button>" +
+      "<button class='btn btn-ghost sm'" + actAttr('click','cfgExportForecast') + ">⬇ Esporta Excel</button>" +
       "<label class='btn btn-ghost sm' style='cursor:pointer;margin:0'>⬆ Importa Excel" +
-      "<input type='file' accept='.xlsx,.xls' style='display:none' onchange='cfgImportForecast(event)'></label>" +
+      "<input type='file' accept='.xlsx,.xls' style='display:none'" + actAttr('change','cfgImportForecast',['@event']) + "></label>" +
       "</div></div>";
   }
   window.cfgExportEmployees = function () {

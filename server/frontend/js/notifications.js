@@ -9,7 +9,7 @@ async function loadNotifications() {
     else badge.style.display='none';
     const sevColors={critical:'var(--bad)',warning:'var(--warn)',info:'var(--brand)'};
     $d('notifList').innerHTML = data.rows.length
-      ? data.rows.map(n=>`<div class="ph-notif-item${n.read_at?'':' unread'}" onclick="clickNotif(${n.id},'${esc(n.action_url||'')}')">
+      ? data.rows.map(n=>`<div class="ph-notif-item${n.read_at?'':' unread'}" ${actAttr('click','clickNotif',[n.id, n.action_url||''])}>
           <div class="ph-notif-title">
             <span class="ph-notif-sev-dot" style="background:${sevColors[n.severity]||'var(--brand)'}"></span>
             ${esc(n.title||'')}
@@ -38,7 +38,7 @@ async function loadNotifPanel() {
     var sevC={critical:'var(--bad)',warning:'var(--warn)',info:'var(--brand)'};
     document.getElementById('notifList').innerHTML = data.rows.length
       ? data.rows.map(function(n){
-          return '<div class="ph-notif-item'+(n.read_at?'':' unread')+'" onclick="clickNotif('+n.id+',\''+esc(n.action_url||'')+'\')">'+
+          return '<div class="ph-notif-item'+(n.read_at?'':' unread')+'"'+actAttr('click','clickNotif',[n.id, n.action_url||''])+'>'+
             '<div class="ph-notif-title"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(sevC[n.severity]||'var(--brand)')+';margin-right:4px;vertical-align:middle"></span>'+esc(n.title||'')+'</div>'+
             (n.body?'<div class="ph-notif-body">'+esc(n.body)+'</div>':'')+
             '<div class="ph-notif-ts">'+fmtTs(n.created_at)+'</div></div>';

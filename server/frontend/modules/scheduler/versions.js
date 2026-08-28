@@ -42,9 +42,9 @@
           "<div style='flex:1'><b>" + esc(v.label) + "</b> " + cov +
           "<div class='text-xs text-muted'>" + esc(v.created_by || '') + " · " + when + "</div></div>" +
           "<div style='display:flex;gap:5px'>" +
-          "<button class='btn ghost sm' onclick='compareVersion(" + v.id + ")'>Confronta</button>" +
-          "<button class='btn btn-primary sm' onclick='restoreVersion(" + v.id + ")'>Ripristina</button>" +
-          "<button class='btn warn sm' onclick='deleteVersion(" + v.id + ")'>🗑</button></div></div>";
+          "<button class='btn ghost sm' "+actAttr('click','compareVersion',[v.id])+">Confronta</button>" +
+          "<button class='btn btn-primary sm' "+actAttr('click','restoreVersion',[v.id])+">Ripristina</button>" +
+          "<button class='btn warn sm' "+actAttr('click','deleteVersion',[v.id])+">🗑</button></div></div>";
       }).join('');
     } catch (e) { body.innerHTML = "<div style='color:var(--bad);padding:12px'>Errore: " + esc(e.message) + "</div>"; }
   }

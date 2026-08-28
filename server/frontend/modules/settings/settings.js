@@ -14,7 +14,7 @@ async function loadUsers(){
       // admin sees everything; other roles are scoped to assigned branches
       if(u.role==='admin') return '<span class="text-xs text-muted">tutte</span>';
       var chips=codes.length?codes.map(function(c){return '<span class="badge b-pri" style="margin:1px">'+esc(c)+'</span>';}).join(''):'<span class="text-xs text-muted">nessuna</span>';
-      return chips+' <button class="btn ghost sm" onclick="openAssignBranches('+u.id+')">Assegna</button>';
+      return chips+' <button class="btn ghost sm" ' + actAttr('click','openAssignBranches',[u.id]) + '>Assegna</button>';
     };
     document.getElementById('usersTbl').innerHTML='<thead><tr><th>Username</th><th>Nome</th><th>Ruolo</th><th>Filiali</th><th>Stato</th><th>Ultimo accesso</th><th></th></tr></thead><tbody>'+
       rows.map(function(u){return '<tr><td><b>'+esc(u.username)+'</b></td><td>'+esc(u.full_name||'')+'</td>'+
@@ -22,8 +22,8 @@ async function loadUsers(){
         '<td>'+branchCell(u)+'</td>'+
         '<td><span class="badge '+(u.active?'b-ok':'b-warn')+'">'+(u.active?'attivo':'disattivo')+'</span></td>'+
         '<td style="font-size:.78rem;color:var(--text-muted)">'+fmtTs2(u.last_login)+'</td>'+
-        '<td style="display:flex;gap:5px"><button class="btn ghost sm" onclick="toggleUser('+u.id+','+!u.active+')">'+(u.active?'Disattiva':'Attiva')+'</button>'+
-        '<button class="btn ghost sm" onclick="resetPw('+u.id+')">Reset pw</button></td></tr>';
+        '<td style="display:flex;gap:5px"><button class="btn ghost sm" ' + actAttr('click','toggleUser',[u.id, !u.active]) + '>'+(u.active?'Disattiva':'Attiva')+'</button>'+
+        '<button class="btn ghost sm" ' + actAttr('click','resetPw',[u.id]) + '>Reset pw</button></td></tr>';
       }).join('')+'</tbody>';
   } catch(e){document.getElementById('usersTbl').innerHTML='<tbody><tr><td class="text-muted">'+esc(e.message)+'</td></tr></tbody>';}
 }

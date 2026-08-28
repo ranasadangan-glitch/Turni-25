@@ -20,19 +20,19 @@
 <div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="autosaveIndicator"><span id="autosaveIcon">⏳</span><span id="autosaveText">Salvataggio…</span></div>
 <div id="undoBar">
-  <button class="undo-btn" id="undoBtn" onclick="spaDoUndo()" title="Ctrl+Z" disabled>↩ Annulla</button>
-  <button class="undo-btn" id="redoBtn" onclick="spaDoRedo()" title="Ctrl+Shift+Z" disabled>↪ Ripeti</button>
+  <button class="undo-btn" id="undoBtn" data-act-click="call" data-call="spaDoUndo" title="Ctrl+Z" disabled>↩ Annulla</button>
+  <button class="undo-btn" id="redoBtn" data-act-click="call" data-call="spaDoRedo" title="Ctrl+Shift+Z" disabled>↪ Ripeti</button>
 </div>
 <div id="kbdHint"></div>
 
 <!-- Context menu (scheduler cells) -->
 <div id="ctxMenu">
-  <div class="ctx-item" onclick="boardCtxAction('edit')">✏️ Modifica</div>
-  <div class="ctx-item" onclick="boardCtxAction('copy')">📋 Copia</div>
-  <div id="ctx-paste" class="ctx-item" onclick="boardCtxAction('paste')" style="display:none">📌 Incolla</div>
-  <div class="ctx-item" onclick="boardCtxAction('duplicate')">⊕ Duplica settimana</div>
+  <div class="ctx-item" data-act-click="call" data-call="boardCtxAction" data-args="[&quot;edit&quot;]">✏️ Modifica</div>
+  <div class="ctx-item" data-act-click="call" data-call="boardCtxAction" data-args="[&quot;copy&quot;]">📋 Copia</div>
+  <div id="ctx-paste" class="ctx-item" data-act-click="call" data-call="boardCtxAction" data-args="[&quot;paste&quot;]" style="display:none">📌 Incolla</div>
+  <div class="ctx-item" data-act-click="call" data-call="boardCtxAction" data-args="[&quot;duplicate&quot;]">⊕ Duplica settimana</div>
   <div class="ctx-sep"></div>
-  <div class="ctx-item danger" onclick="boardCtxAction('delete')">🗑 Svuota</div>
+  <div class="ctx-item danger" data-act-click="call" data-call="boardCtxAction" data-args="[&quot;delete&quot;]">🗑 Svuota</div>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -56,55 +56,55 @@
     <!-- Grouped, collapsible enterprise navigation. Every item keeps its
          data-nav + go('<key>') so routes/permissions/active-highlighting are
          unchanged; groups only reorganise how they are displayed. -->
-    <button class="nav-item nav-top active" data-nav="home" onclick="go('home')"><span class="nav-item-icon">🏠</span>Dashboard</button>
+    <button class="nav-item nav-top active" data-nav="home" data-act-click="call" data-call="go" data-args="[&quot;home&quot;]"><span class="nav-item-icon">🏠</span>Dashboard</button>
 
     <div class="nav-group" data-group="personale">
-      <button class="nav-group-h" onclick="toggleNavGroup('personale')"><span class="nav-item-icon">👥</span><span class="nav-group-lbl">Personale</span><span class="nav-chev">▾</span></button>
+      <button class="nav-group-h" data-act-click="call" data-call="toggleNavGroup" data-args="[&quot;personale&quot;]"><span class="nav-item-icon">👥</span><span class="nav-group-lbl">Personale</span><span class="nav-chev">▾</span></button>
       <div class="nav-group-body">
-        <button class="nav-item" data-nav="dipendenti"   onclick="go('dipendenti')">Dipendenti</button>
-        <button class="nav-item adminonly" data-nav="contratti-cfg" onclick="go('contratti-cfg')">Contratti</button>
-        <button class="nav-item" data-nav="team"         onclick="go('team')">Team</button>
-        <button class="nav-item adminonly" data-nav="ruoli" onclick="go('ruoli')">Ruoli</button>
+        <button class="nav-item" data-nav="dipendenti"   data-act-click="call" data-call="go" data-args="[&quot;dipendenti&quot;]">Dipendenti</button>
+        <button class="nav-item adminonly" data-nav="contratti-cfg" data-act-click="call" data-call="go" data-args="[&quot;contratti-cfg&quot;]">Contratti</button>
+        <button class="nav-item" data-nav="team"         data-act-click="call" data-call="go" data-args="[&quot;team&quot;]">Team</button>
+        <button class="nav-item adminonly" data-nav="ruoli" data-act-click="call" data-call="go" data-args="[&quot;ruoli&quot;]">Ruoli</button>
       </div>
     </div>
 
     <div class="nav-group" data-group="turni">
-      <button class="nav-group-h" onclick="toggleNavGroup('turni')"><span class="nav-item-icon">📅</span><span class="nav-group-lbl">Turni</span><span class="nav-chev">▾</span></button>
+      <button class="nav-group-h" data-act-click="call" data-call="toggleNavGroup" data-args="[&quot;turni&quot;]"><span class="nav-item-icon">📅</span><span class="nav-group-lbl">Turni</span><span class="nav-chev">▾</span></button>
       <div class="nav-group-body">
-        <button class="nav-item" data-nav="scheduler" onclick="go('scheduler')">Pianificazione</button>
-        <button class="nav-item" data-nav="forecast"  onclick="go('forecast')">Forecast</button>
-        <button class="nav-item" data-nav="assenze"   onclick="go('assenze')">Assenze</button>
+        <button class="nav-item" data-nav="scheduler" data-act-click="call" data-call="go" data-args="[&quot;scheduler&quot;]">Pianificazione</button>
+        <button class="nav-item" data-nav="forecast"  data-act-click="call" data-call="go" data-args="[&quot;forecast&quot;]">Forecast</button>
+        <button class="nav-item" data-nav="assenze"   data-act-click="call" data-call="go" data-args="[&quot;assenze&quot;]">Assenze</button>
       </div>
     </div>
 
     <div class="nav-group" data-group="operativita">
-      <button class="nav-group-h" onclick="toggleNavGroup('operativita')"><span class="nav-item-icon">🚚</span><span class="nav-group-lbl">Operatività</span><span class="nav-chev">▾</span></button>
+      <button class="nav-group-h" data-act-click="call" data-call="toggleNavGroup" data-args="[&quot;operativita&quot;]"><span class="nav-item-icon">🚚</span><span class="nav-group-lbl">Operatività</span><span class="nav-chev">▾</span></button>
       <div class="nav-group-body">
-        <button class="nav-item adminonly" data-nav="sedi"    onclick="go('sedi')">Filiali</button>
-        <button class="nav-item adminonly" data-nav="servizi" onclick="go('servizi')">Servizi</button>
-        <button class="nav-item adminonly" data-nav="legenda" onclick="go('legenda')">Codici</button>
-        <button class="nav-item" data-nav="rotte"       onclick="go('rotte')">Rotte</button>
-        <button class="nav-item" data-nav="performance" onclick="go('performance')">Performance</button>
-        <button class="nav-item" data-nav="kpi"         onclick="go('kpi')">KPI</button>
+        <button class="nav-item adminonly" data-nav="sedi"    data-act-click="call" data-call="go" data-args="[&quot;sedi&quot;]">Filiali</button>
+        <button class="nav-item adminonly" data-nav="servizi" data-act-click="call" data-call="go" data-args="[&quot;servizi&quot;]">Servizi</button>
+        <button class="nav-item adminonly" data-nav="legenda" data-act-click="call" data-call="go" data-args="[&quot;legenda&quot;]">Codici</button>
+        <button class="nav-item" data-nav="rotte"       data-act-click="call" data-call="go" data-args="[&quot;rotte&quot;]">Rotte</button>
+        <button class="nav-item" data-nav="performance" data-act-click="call" data-call="go" data-args="[&quot;performance&quot;]">Performance</button>
+        <button class="nav-item" data-nav="kpi"         data-act-click="call" data-call="go" data-args="[&quot;kpi&quot;]">KPI</button>
       </div>
     </div>
 
     <div class="nav-group" data-group="report">
-      <button class="nav-group-h" onclick="toggleNavGroup('report')"><span class="nav-item-icon">📊</span><span class="nav-group-lbl">Report</span><span class="nav-chev">▾</span></button>
+      <button class="nav-group-h" data-act-click="call" data-call="toggleNavGroup" data-args="[&quot;report&quot;]"><span class="nav-item-icon">📊</span><span class="nav-group-lbl">Report</span><span class="nav-chev">▾</span></button>
       <div class="nav-group-body">
-        <button class="nav-item" data-nav="report"  onclick="go('report')">Report</button>
-        <button class="nav-item adminonly" data-nav="analisi" onclick="go('analisi')">Analisi</button>
-        <button class="nav-item adminonly" data-nav="esportazioni" onclick="go('esportazioni')">Esporta</button>
+        <button class="nav-item" data-nav="report"  data-act-click="call" data-call="go" data-args="[&quot;report&quot;]">Report</button>
+        <button class="nav-item adminonly" data-nav="analisi" data-act-click="call" data-call="go" data-args="[&quot;analisi&quot;]">Analisi</button>
+        <button class="nav-item adminonly" data-nav="esportazioni" data-act-click="call" data-call="go" data-args="[&quot;esportazioni&quot;]">Esporta</button>
       </div>
     </div>
 
     <div class="nav-group adminonly" data-group="admin">
-      <button class="nav-group-h" onclick="toggleNavGroup('admin')"><span class="nav-item-icon">⚙️</span><span class="nav-group-lbl">Amministrazione</span><span class="nav-chev">▾</span></button>
+      <button class="nav-group-h" data-act-click="call" data-call="toggleNavGroup" data-args="[&quot;admin&quot;]"><span class="nav-item-icon">⚙️</span><span class="nav-group-lbl">Amministrazione</span><span class="nav-chev">▾</span></button>
       <div class="nav-group-body">
-        <button class="nav-item adminonly" data-nav="utenti"  onclick="go('utenti')">Utenti</button>
-        <button class="nav-item adminonly" data-nav="audit"   onclick="go('audit')">Audit Log</button>
-        <button class="nav-item adminonly" data-nav="importa" onclick="go('importa')">Importa</button>
-        <button class="nav-item adminonly" data-nav="impostazioni" onclick="go('impostazioni')">Impostazioni</button>
+        <button class="nav-item adminonly" data-nav="utenti"  data-act-click="call" data-call="go" data-args="[&quot;utenti&quot;]">Utenti</button>
+        <button class="nav-item adminonly" data-nav="audit"   data-act-click="call" data-call="go" data-args="[&quot;audit&quot;]">Audit Log</button>
+        <button class="nav-item adminonly" data-nav="importa" data-act-click="call" data-call="go" data-args="[&quot;importa&quot;]">Importa</button>
+        <button class="nav-item adminonly" data-nav="impostazioni" data-act-click="call" data-call="go" data-args="[&quot;impostazioni&quot;]">Impostazioni</button>
       </div>
     </div>
 
@@ -118,7 +118,7 @@
       </div>
       <div class="nav-sync-chip" id="navSync">🔵 Connesso</div>
       <div style="padding:4px 8px 2px"><span class="save-pill" id="saveState"></span></div>
-      <button class="nav-logout" onclick="doLogout()"><span>↪</span>Esci</button>
+      <button class="nav-logout" data-act-click="call" data-call="doLogout"><span>↪</span>Esci</button>
     </div>
   </nav>
 
@@ -137,20 +137,20 @@
       <div class="header-search">
         <input class="header-search-input" id="globalSearch"
                placeholder="Cerca dipendente, ID…" autocomplete="off"
-               oninput="debouncedGlobalSearch(this.value)"
-               onblur="setTimeout(()=>{document.getElementById('searchDropdown').style.display='none'},200)">
+               data-act-input="call" data-call="debouncedGlobalSearch" data-args="[&quot;@value&quot;]"
+               data-act-focusout="hideSearchDrop">
         <div id="searchDropdown" class="header-search-dropdown"></div>
       </div>
 
       <!-- Notification bell -->
       <div class="notif-wrap">
-        <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifiche">
+        <button class="notif-btn" data-act-click="call" data-call="toggleNotifPanel" title="Notifiche">
           🔔<span class="notif-badge" id="notifBadge">0</span>
         </button>
         <div class="notif-panel" id="notifPanel">
           <div class="notif-panel-head">
             <span>Notifiche</span>
-            <button class="header-btn sm" onclick="markAllRead()" style="font-size:.7rem">Segna lette</button>
+            <button class="header-btn sm" data-act-click="call" data-call="markAllRead" style="font-size:.7rem">Segna lette</button>
           </div>
           <div id="notifList"></div>
         </div>
@@ -159,20 +159,20 @@
       <!-- Workspace header controls — always visible, one workspace, no toggling -->
       <div id="workspaceHeader" style="display:flex;align-items:center;gap:8px">
         <span class="role-badge"><span class="role-dot"></span><span id="roleTxt">Team</span></span>
-        <button class="branch-chip teamonly" id="filChip" onclick="openFilialePick()">
+        <button class="branch-chip teamonly" id="filChip" data-act-click="call" data-call="openFilialePick">
           📍 <span id="filChipTxt">—</span> ▾
         </button>
         <select id="branchSel" class="sel" style="font-size:.78rem">
           <option value="">Tutte le filiali</option>
         </select>
-        <button class="nav-arrow" onclick="shiftMonth(-1)">‹</button>
+        <button class="nav-arrow" data-act-click="call" data-call="shiftMonth" data-args="[-1]">‹</button>
         <span class="period-label" id="monthLabel">—</span>
-        <button class="nav-arrow" onclick="shiftMonth(1)">›</button>
-        <button class="header-btn primary" onclick="refreshAll()">↻ Aggiorna</button>
+        <button class="nav-arrow" data-act-click="call" data-call="shiftMonth" data-args="[1]">›</button>
+        <button class="header-btn primary" data-act-click="call" data-call="refreshAll">↻ Aggiorna</button>
       </div>
 
       <!-- Login button (scheduler legacy) -->
-      <button class="header-btn" id="headerLoginBtn" onclick="toggleLogin()" style="display:none">Accedi</button>
+      <button class="header-btn" id="headerLoginBtn" data-act-click="call" data-call="toggleLogin" style="display:none">Accedi</button>
     </header>
 
     <!-- ════════════════════════════════════
@@ -199,7 +199,7 @@
             <div class="flex items-center gap-2">
               <input type="date" id="kpiDate" class="inp" style="width:136px;font-size:.78rem;padding:6px 9px">
               <span id="dspDateLabel" class="text-sm text-muted"></span>
-              <button class="header-btn sm" id="overviewToggle" onclick="toggleOverview()" title="Comprimi/espandi riepilogo">▾ Riepilogo</button>
+              <button class="header-btn sm" id="overviewToggle" data-act-click="call" data-call="toggleOverview" title="Comprimi/espandi riepilogo">▾ Riepilogo</button>
             </div>
           </div>
 
@@ -338,54 +338,54 @@
 
         <!-- Scheduler toolbar -->
         <div class="sch-toolbar" id="planToolbar">
-          <button class="today-btn" onclick="goToToday()">Oggi</button>
-          <button class="nav-arrow" onclick="shiftWeek(-1)">‹</button>
-          <button class="nav-arrow" onclick="shiftWeek(1)">›</button>
+          <button class="today-btn" data-act-click="call" data-call="goToToday">Oggi</button>
+          <button class="nav-arrow" data-act-click="call" data-call="shiftWeek" data-args="[-1]">‹</button>
+          <button class="nav-arrow" data-act-click="call" data-call="shiftWeek" data-args="[1]">›</button>
           <span id="weekNav"></span>
           <div class="t-divider"></div>
           <div class="view-seg" id="planModeSeg">
-            <button data-pm="day"   onclick="setPlanMode('day')">Giorno</button>
-            <button class="on" data-pm="week"  onclick="setPlanMode('week')">Settimana</button>
-            <button data-pm="month" onclick="setPlanMode('month')">Mese</button>
+            <button data-pm="day"   data-act-click="call" data-call="setPlanMode" data-args="[&quot;day&quot;]">Giorno</button>
+            <button class="on" data-pm="week"  data-act-click="call" data-call="setPlanMode" data-args="[&quot;week&quot;]">Settimana</button>
+            <button data-pm="month" data-act-click="call" data-call="setPlanMode" data-args="[&quot;month&quot;]">Mese</button>
           </div>
           <div class="t-divider"></div>
           <span class="sch-quicksearch">
             <input type="search" id="qBar" placeholder="🔍 Cerca DAS…" autocomplete="off"
-                   oninput="schedSearchInput(this.value)" onkeydown="schedSearchKey(event)"
+                   data-act-input="call" data-call="schedSearchInput" data-args="[&quot;@value&quot;]" data-act-keydown="call" data-call="schedSearchKey" data-args="[&quot;@event&quot;]"
                    title="Cerca dipendente: nome, cognome, ID, badge, filiale, servizio (Ctrl+F)">
           </span>
           <div class="t-divider"></div>
           <div class="zoom-ctrl" title="Zoom scheduler">
-            <button class="zoom-btn" onclick="stepZoom(-1)" aria-label="Riduci">−</button>
+            <button class="zoom-btn" data-act-click="call" data-call="stepZoom" data-args="[-1]" aria-label="Riduci">−</button>
             <span id="zoomLbl">100%</span>
-            <button class="zoom-btn" onclick="stepZoom(1)" aria-label="Aumenta">+</button>
+            <button class="zoom-btn" data-act-click="call" data-call="stepZoom" data-args="[1]" aria-label="Aumenta">+</button>
           </div>
           <div class="t-divider"></div>
-          <span id="brushChip" class="brush-chip" style="display:none">🖌 <span class="bc-code"></span><button onclick="clearBrush()" title="Esci dal pennello (ESC)">✕</button></span>
+          <span id="brushChip" class="brush-chip" style="display:none">🖌 <span class="bc-code"></span><button data-act-click="call" data-call="clearBrush" title="Esci dal pennello (ESC)">✕</button></span>
           <span id="rangeTools" class="range-tools">
             <span class="rt-count"></span>
-            <button class="header-btn" onclick="schedFillRange()" title="Riempi la selezione con il pennello">▦ Riempi</button>
-            <button class="header-btn" onclick="schedClearRange()" title="Svuota la selezione">␡ Svuota</button>
+            <button class="header-btn" data-act-click="call" data-call="schedFillRange" title="Riempi la selezione con il pennello">▦ Riempi</button>
+            <button class="header-btn" data-act-click="call" data-call="schedClearRange" title="Svuota la selezione">␡ Svuota</button>
           </span>
-          <button class="header-btn" id="repeatWeekBtn" onclick="schedRepeatPrevWeek()" title="Copia la settimana precedente su quella corrente (Shift+clic per selezionare intervalli)">⟲ Ripeti sett.</button>
+          <button class="header-btn" id="repeatWeekBtn" data-act-click="call" data-call="schedRepeatPrevWeek" title="Copia la settimana precedente su quella corrente (Shift+clic per selezionare intervalli)">⟲ Ripeti sett.</button>
           <div class="app-header-spacer"></div>
           <!-- Frequent, always-visible: filters toggle + the "More" menu.
                Advanced/occasional actions live inside More (their ids/handlers
                are unchanged, so all existing wiring keeps working). -->
-          <button class="header-btn" id="schedFiltersBtn" onclick="toggleSchedFilterBar()" title="Mostra/nascondi filtri">⧉ Filtri</button>
+          <button class="header-btn" id="schedFiltersBtn" data-act-click="call" data-call="toggleSchedFilterBar" title="Mostra/nascondi filtri">⧉ Filtri</button>
           <div class="sch-more">
-            <button class="header-btn" id="schedMoreBtn" onclick="toggleSchedMore(event)" aria-haspopup="true" aria-expanded="false" title="Altre azioni">⋯ Altro</button>
+            <button class="header-btn" id="schedMoreBtn" data-act-click="call" data-call="toggleSchedMore" data-args="[&quot;@event&quot;]" aria-haspopup="true" aria-expanded="false" title="Altre azioni">⋯ Altro</button>
             <div class="sch-more-panel" id="schedMorePanel">
-              <button class="sch-more-item" id="opsToggleBtn" onclick="toggleOpsCenter()">🎛 Centro operativo</button>
-              <button class="sch-more-item" id="fcToggleBtn" onclick="toggleForecastPanel()">📊 Forecast / Copertura</button>
+              <button class="sch-more-item" id="opsToggleBtn" data-act-click="call" data-call="toggleOpsCenter">🎛 Centro operativo</button>
+              <button class="sch-more-item" id="fcToggleBtn" data-act-click="call" data-call="toggleForecastPanel">📊 Forecast / Copertura</button>
               <div class="sch-more-sep"></div>
               <div class="sch-more-head">Cronologia</div>
-              <button class="sch-more-item adminonly" onclick="openVersions()">🗂 Versioni</button>
-              <button class="sch-more-item adminonly" id="verUndoBtn" onclick="undoRestore()" style="display:none">↩ Annulla ripristino</button>
-              <button class="sch-more-item adminonly" onclick="undoGeneratedPlan()">↩ Annulla generazione</button>
+              <button class="sch-more-item adminonly" data-act-click="call" data-call="openVersions">🗂 Versioni</button>
+              <button class="sch-more-item adminonly" id="verUndoBtn" data-act-click="call" data-call="undoRestore" style="display:none">↩ Annulla ripristino</button>
+              <button class="sch-more-item adminonly" data-act-click="call" data-call="undoGeneratedPlan">↩ Annulla generazione</button>
               <div class="sch-more-sep"></div>
-              <button class="sch-more-item adminonly" onclick="openImport()">⬆ Importa dati</button>
-              <button class="sch-more-item adminonly" onclick="openDriver()">＋ Nuovo DAS</button>
+              <button class="sch-more-item adminonly" data-act-click="call" data-call="openImport">⬆ Importa dati</button>
+              <button class="sch-more-item adminonly" data-act-click="call" data-call="openDriver">＋ Nuovo DAS</button>
             </div>
           </div>
         </div>
@@ -396,7 +396,7 @@
           <div class="sch-view on" id="v-plan">
             <!-- Floating AI assistant (replaces the old toolbar button; keeps the
                  aiCount badge id so assistant.js updates it unchanged). -->
-            <button class="ai-fab" id="aiFab" onclick="toggleAssistant()" title="Assistente pianificazione" aria-label="Assistente pianificazione">🤖<span class="ai-fab-badge" id="aiCount" style="display:none">0</span></button>
+            <button class="ai-fab" id="aiFab" data-act-click="call" data-call="toggleAssistant" title="Assistente pianificazione" aria-label="Assistente pianificazione">🤖<span class="ai-fab-badge" id="aiCount" style="display:none">0</span></button>
             <div id="violBanner" style="display:none;background:var(--bad-bg);border-bottom:1px solid var(--bad);padding:8px 16px;font-size:.8rem"></div>
             <!-- Horizontal Excel-style filter bar (sticky, above the grid).
                  The native selects below stay in the DOM (hidden) so the
@@ -405,13 +405,13 @@
                  multi-select popovers. -->
             <div class="sched-filterbar" id="schedFilterBar" data-open="0" style="display:none"></div>
             <div id="schedNativeFilters" hidden aria-hidden="true">
-              <input type="search" id="q" oninput="onFilterChange()" autocomplete="off">
-              <select id="fFiliale" onchange="onFilterChange()"></select>
-              <label id="lblManager"></label><select id="fManager" onchange="onFilterChange()"></select>
-              <select id="fContract" onchange="onFilterChange()"></select>
-              <label id="lblTeam"></label><select id="fTeam" onchange="onFilterChange()"></select>
-              <select id="fService" onchange="onFilterChange()"></select>
-              <select id="fStato" onchange="onFilterChange()">
+              <input type="search" id="q" data-act-input="call" data-call="onFilterChange" autocomplete="off">
+              <select id="fFiliale" data-act-change="call" data-call="onFilterChange"></select>
+              <label id="lblManager"></label><select id="fManager" data-act-change="call" data-call="onFilterChange"></select>
+              <select id="fContract" data-act-change="call" data-call="onFilterChange"></select>
+              <label id="lblTeam"></label><select id="fTeam" data-act-change="call" data-call="onFilterChange"></select>
+              <select id="fService" data-act-change="call" data-call="onFilterChange"></select>
+              <select id="fStato" data-act-change="call" data-call="onFilterChange">
                 <option value="">Tutti gli stati</option>
                 <option value="turno">In turno</option>
                 <option value="riposo">Riposo (OFF)</option>
@@ -447,7 +447,7 @@
                  the board and horizontally scroll-synced with it. -->
             <div class="fcd-footer" id="fcDeltaFooter">
               <div class="fcd-title">Riepilogo Forecast
-                <select id="fcdSvc" class="fcd-svc" onchange="renderForecastDeltaFooter()" title="Seleziona un servizio per modificare il forecast"></select>
+                <select id="fcdSvc" class="fcd-svc" data-act-change="call" data-call="renderForecastDeltaFooter" title="Seleziona un servizio per modificare il forecast"></select>
               </div>
               <div class="fcd-scroll" id="fcdScroll"><div class="fcd-inner" id="fcdInner"></div></div>
             </div>
@@ -456,19 +456,19 @@
           <!-- Copertura / Forecast view -->
           <div class="sch-view" id="v-cov" style="overflow:auto;padding:16px">
             <h1 class="planhead">Forecast &amp; Copertura <small id="covScope"></small></h1>
-            <select id="covFil" onchange="window._covFil=this.value;renderCov()" class="t-sel" style="margin-bottom:10px"></select>
+            <select id="covFil" data-act-change="covFilChange" class="t-sel" style="margin-bottom:10px"></select>
             <div id="covKpis" class="kpis" style="margin-bottom:12px"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
               <div class="seg" id="covRangeSeg">
-                <button class="on" data-cr="week" onclick="setCovRange('week')">1 Sett.</button>
-                <button data-cr="2weeks" onclick="setCovRange('2weeks')">2 Sett.</button>
-                <button data-cr="4weeks" onclick="setCovRange('4weeks')">4 Sett.</button>
-                <button data-cr="month" onclick="setCovRange('month')">Mese</button>
+                <button class="on" data-cr="week" data-act-click="call" data-call="setCovRange" data-args="[&quot;week&quot;]">1 Sett.</button>
+                <button data-cr="2weeks" data-act-click="call" data-call="setCovRange" data-args="[&quot;2weeks&quot;]">2 Sett.</button>
+                <button data-cr="4weeks" data-act-click="call" data-call="setCovRange" data-args="[&quot;4weeks&quot;]">4 Sett.</button>
+                <button data-cr="month" data-act-click="call" data-call="setCovRange" data-args="[&quot;month&quot;]">Mese</button>
               </div>
               <div class="weeknav" id="covWeekNav"></div>
               <div class="seg" id="covMode">
-                <button class="on" data-m="delta" onclick="setCovMode('delta')">Copertura</button>
-                <button data-m="forecast" onclick="setCovMode('forecast')">Forecast (modifica)</button>
+                <button class="on" data-m="delta" data-act-click="call" data-call="setCovMode" data-args="[&quot;delta&quot;]">Copertura</button>
+                <button data-m="forecast" data-act-click="call" data-call="setCovMode" data-args="[&quot;forecast&quot;]">Forecast (modifica)</button>
               </div>
             </div>
             <div class="cov-scroll" id="covScroll"><table class="grid" id="covTbl"></table></div>
@@ -478,13 +478,13 @@
           <div class="sch-view" id="v-das" style="overflow:auto;padding:16px">
             <h1 class="planhead">Anagrafica DAS <small id="dasScope"></small></h1>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-              <div class="t-search" style="max-width:220px"><input type="search" id="qDas" placeholder="Cerca…" oninput="renderDas()" autocomplete="off"></div>
-              <select id="aFiliale" onchange="renderDas()" class="t-sel"></select>
-              <select id="aStato" onchange="renderDas()" class="t-sel">
+              <div class="t-search" style="max-width:220px"><input type="search" id="qDas" placeholder="Cerca…" data-act-input="call" data-call="renderDas" autocomplete="off"></div>
+              <select id="aFiliale" data-act-change="call" data-call="renderDas" class="t-sel"></select>
+              <select id="aStato" data-act-change="call" data-call="renderDas" class="t-sel">
                 <option value="">Tutti</option><option value="active">Attivi</option>
                 <option value="inactive">Inattivi</option><option value="pending">In attesa</option>
               </select>
-              <button class="btn ghost sm" onclick="exportDas()">⬇ CSV</button>
+              <button class="btn ghost sm" data-act-click="call" data-call="exportDas">⬇ CSV</button>
             </div>
             <div style="overflow:auto"><table id="dasTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"><thead></thead><tbody></tbody></table></div>
           </div>
@@ -509,8 +509,8 @@
           <div class="sch-view adminonly" id="v-an" style="overflow:auto;padding:16px">
             <h1 class="planhead">Analisi</h1>
             <div style="display:flex;gap:8px;margin-bottom:10px">
-              <select id="anFiliale" onchange="renderAnalysis()" class="t-sel"></select>
-              <button class="btn ghost sm" onclick="exportAnalysis()">⬇ CSV</button>
+              <select id="anFiliale" data-act-change="call" data-call="renderAnalysis" class="t-sel"></select>
+              <button class="btn ghost sm" data-act-click="call" data-call="exportAnalysis">⬇ CSV</button>
             </div>
             <div class="an-kpis" id="anKpis"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="anCharts"></div>
@@ -520,9 +520,9 @@
           <div class="sch-view adminonly" id="v-log" style="overflow:auto;padding:16px">
             <h1 class="planhead">Registro modifiche</h1>
             <div style="display:flex;gap:8px;margin-bottom:10px">
-              <div class="t-search" style="max-width:220px"><input type="search" id="qLog" placeholder="Cerca…" oninput="renderLog()" autocomplete="off"></div>
-              <button class="btn ghost sm" onclick="exportLog()">⬇ CSV</button>
-              <button class="btn warn sm adminonly" onclick="clearLog()">🗑 Svuota</button>
+              <div class="t-search" style="max-width:220px"><input type="search" id="qLog" placeholder="Cerca…" data-act-input="call" data-call="renderLog" autocomplete="off"></div>
+              <button class="btn ghost sm" data-act-click="call" data-call="exportLog">⬇ CSV</button>
+              <button class="btn warn sm adminonly" data-act-click="call" data-call="clearLog">🗑 Svuota</button>
             </div>
             <div style="overflow:auto"><table id="logTbl" style="width:100%;border-collapse:collapse;font-size:.78rem"></table></div>
           </div>
@@ -540,17 +540,17 @@
             <h1 class="planhead">Dati &amp; Sincronizzazione</h1>
             <p class="text-sm text-muted" style="margin-bottom:14px">Fonte di verità: PostgreSQL. localStorage è solo cache locale.</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-              <button class="btn ghost sm" onclick="exportJson()">⬇ Esporta JSON</button>
-              <label class="btn ghost sm">⬆ Importa JSON<input type="file" accept=".json" onchange="importJson(event)" style="display:none"></label>
-              <button class="btn warn sm adminonly" onclick="resetMonth()">🗑 Azzera mese</button>
+              <button class="btn ghost sm" data-act-click="call" data-call="exportJson">⬇ Esporta JSON</button>
+              <label class="btn ghost sm">⬆ Importa JSON<input type="file" accept=".json" data-act-change="call" data-call="importJson" data-args="[&quot;@event&quot;]" style="display:none"></label>
+              <button class="btn warn sm adminonly" data-act-click="call" data-call="resetMonth">🗑 Azzera mese</button>
             </div>
             <div style="display:flex;gap:8px;margin-bottom:12px">
               <input id="apiUrl" class="inp" placeholder="URL endpoint legacy (opzionale)" style="max-width:340px;font-size:.8rem">
-              <button class="btn ghost sm" onclick="syncPull()">⬇ Pull</button>
-              <button class="btn ghost sm" onclick="syncPush()">⬆ Push</button>
+              <button class="btn ghost sm" data-act-click="call" data-call="syncPull">⬇ Pull</button>
+              <button class="btn ghost sm" data-act-click="call" data-call="syncPush">⬆ Push</button>
             </div>
             <label style="display:flex;align-items:center;gap:7px;font-size:.8rem;cursor:pointer">
-              <input type="checkbox" id="autoGenChk" onchange="toggleAutoGen()">
+              <input type="checkbox" id="autoGenChk" data-act-change="call" data-call="toggleAutoGen">
               Genera turni automaticamente all'inizio del mese
             </label>
             <div id="syncMsg" class="text-sm text-muted mt-2"></div>
@@ -565,13 +565,13 @@
           <div class="people-sidebar-head">
             <div class="people-sidebar-search">
               <span>🔍</span>
-              <input id="empSearch" placeholder="Cerca dipendente…" oninput="filterEmployees(this.value)" autocomplete="off">
+              <input id="empSearch" placeholder="Cerca dipendente…" data-act-input="call" data-call="filterEmployees" data-args="[&quot;@value&quot;]" autocomplete="off">
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <select id="empBranchFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" onchange="filterEmployees()">
+              <select id="empBranchFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" data-act-change="call" data-call="filterEmployees">
                 <option value="">Tutte le filiali</option>
               </select>
-              <select id="empStatusFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" onchange="filterEmployees()">
+              <select id="empStatusFilter" class="sel" style="flex:1;font-size:.8rem;padding:5px 8px" data-act-change="call" data-call="filterEmployees">
                 <option value="">Tutti</option>
                 <option value="active">Attivi</option>
                 <option value="inactive">Inattivi</option>
@@ -579,7 +579,7 @@
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span id="empCount" class="text-sm text-muted">—</span>
-              <button class="btn btn-primary btn-sm" onclick="openNewEmployee()">+ Nuovo</button>
+              <button class="btn btn-primary btn-sm" data-act-click="call" data-call="openNewEmployee">+ Nuovo</button>
             </div>
           </div>
           <div class="people-sidebar-body emp-list" id="empList">
@@ -657,7 +657,7 @@
                 </select>
               </div>
               <div><label class="lbl">Filiali</label><select id="nuBranches" class="sel" style="width:100%" multiple size="3"></select></div>
-              <div><button class="btn btn-primary w-full" onclick="createUser()">+ Crea account</button></div>
+              <div><button class="btn btn-primary w-full" data-act-click="call" data-call="createUser">+ Crea account</button></div>
             </div>
             <div id="nuMsg" class="text-sm mt-2"></div>
           </div>
@@ -710,7 +710,7 @@
 <div id="slidePanel">
   <div class="sp-head">
     <div><h3 id="spTitle">Turno</h3><p id="spSub">—</p></div>
-    <button class="sp-close" onclick="closePanel()" title="ESC">✕</button>
+    <button class="sp-close" data-act-click="call" data-call="closePanel" title="ESC">✕</button>
   </div>
   <div class="sp-body">
     <div id="spConflicts"></div>
@@ -737,17 +737,17 @@
     </div>
   </div>
   <div class="sp-footer">
-    <button class="sp-btn ok"    onclick="boardSpSave()">✓ Salva</button>
-    <button class="sp-btn ghost" onclick="boardSpDuplicate()">⊕ Duplica</button>
-    <button class="sp-btn del"   onclick="boardSpDelete()">🗑 Svuota</button>
+    <button class="sp-btn ok"    data-act-click="call" data-call="boardSpSave">✓ Salva</button>
+    <button class="sp-btn ghost" data-act-click="call" data-call="boardSpDuplicate">⊕ Duplica</button>
+    <button class="sp-btn del"   data-act-click="call" data-call="boardSpDelete">🗑 Svuota</button>
   </div>
 </div>
-<div id="spBackdrop" onclick="closePanel()" style="position:fixed;inset:0;z-index:299;display:none"></div>
+<div id="spBackdrop" data-act-click="call" data-call="closePanel" style="position:fixed;inset:0;z-index:299;display:none"></div>
 
 <!-- ── Scheduler overlays ── -->
 <div class="overlay" id="picker" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:520px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="pkTitle">Seleziona turno</h2>
     <p class="text-sm text-muted" id="pkSub" style="margin:-6px 0 12px"></p>
     <div id="pkBody"></div>
@@ -755,50 +755,50 @@
 </div>
 <div class="overlay" id="loginBox" role="dialog" aria-modal="true">
   <div class="obox">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Accesso team</h2>
     <div style="display:grid;gap:10px;margin-top:12px">
       <div><label class="lbl">Username (opzionale)</label><input id="luUser" class="inp" placeholder="Lascia vuoto per Admin"></div>
-      <div><label class="lbl">PIN</label><input id="luPin" class="inp" type="password" maxlength="12" onkeydown="if(event.key==='Enter')doLogin()"></div>
-      <button class="btn" onclick="doLogin()">Accedi</button>
+      <div><label class="lbl">PIN</label><input id="luPin" class="inp" type="password" maxlength="12" data-act-keydown="pinEnter"></div>
+      <button class="btn" data-act-click="call" data-call="doLogin">Accedi</button>
       <div id="luMsg" class="text-sm" style="color:var(--bad)"></div>
       <hr class="divider">
       <div class="adminonly">
         <label class="lbl">Nuovo PIN admin</label>
-        <div style="display:flex;gap:7px"><input id="pinNew" class="inp flex-1" type="text" placeholder="Nuovo PIN"><button class="btn ghost sm" onclick="changePin()">Salva</button></div>
+        <div style="display:flex;gap:7px"><input id="pinNew" class="inp flex-1" type="text" placeholder="Nuovo PIN"><button class="btn ghost sm" data-act-click="call" data-call="changePin">Salva</button></div>
       </div>
     </div>
   </div>
 </div>
 <div class="overlay" id="autoPick" role="dialog" aria-modal="true">
   <div class="obox">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Genera turni automatici</h2>
     <div style="display:grid;gap:10px;margin-top:12px">
       <div><label class="lbl">Filiale</label><select id="autoFil" class="sel w-full"></select></div>
       <label style="display:flex;align-items:center;gap:7px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="autoOverwrite"> Sovrascrivi celle già compilate</label>
-      <button class="btn" onclick="runAutoGen()">▶ Genera</button>
+      <button class="btn" data-act-click="call" data-call="runAutoGen">▶ Genera</button>
       <div id="autoMsg" class="text-sm text-muted"></div>
     </div>
   </div>
 </div>
 <div class="overlay" id="importDasPick" role="dialog" aria-modal="true">
   <div class="obox">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Importa DAS</h2>
     <div style="display:grid;gap:10px;margin-top:12px">
       <div>
         <label class="lbl">Incolla lista (uno per riga: Cognome Nome Filiale Contratto Servizio)</label>
         <textarea id="ewArea" class="inp" rows="8" placeholder="Rossi Mario DLO1 21 NEXT&#10;Bianchi Laura DLO7 PTV 18h SAME A"></textarea>
       </div>
-      <button class="btn" onclick="importEw()">Importa</button>
+      <button class="btn" data-act-click="call" data-call="importEw">Importa</button>
       <div id="ewMsg" class="text-sm text-muted"></div>
     </div>
   </div>
 </div>
 <div class="overlay" id="drvEdit" role="dialog" aria-modal="true">
   <div class="obox">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="drvEditTitle">Modifica DAS</h2>
     <div style="display:grid;gap:10px;margin-top:12px" id="drvEditBody"></div>
   </div>
@@ -806,17 +806,17 @@
 <!-- ── Scheduler: nuovo / modifica DAS (roster driver) ── -->
 <div class="overlay" id="drv" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:660px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="drvTitle">Nuovo DAS</h2>
     <p class="text-sm text-muted" id="drvSub" style="margin:-6px 0 12px"></p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label class="lbl">Cognome *</label><input id="dCognome" class="inp" autocomplete="off"></div>
       <div><label class="lbl">Nome</label><input id="dNome" class="inp" autocomplete="off"></div>
       <div><label class="lbl">Filiale</label><select id="dFiliale" class="sel w-full"></select></div>
-      <div><label class="lbl">Servizio</label><select id="dService" class="sel w-full" onchange="onServiceChange()"></select></div>
-      <div><label class="lbl">Contratto</label><select id="dContratto" class="sel w-full" onchange="onContractChange()"></select></div>
+      <div><label class="lbl">Servizio</label><select id="dService" class="sel w-full" data-act-change="call" data-call="onServiceChange"></select></div>
+      <div><label class="lbl">Contratto</label><select id="dContratto" class="sel w-full" data-act-change="call" data-call="onContractChange"></select></div>
       <div><label class="lbl">Codice predefinito</label><select id="dDefault" class="sel w-full"></select></div>
-      <div><label class="lbl">Tipo contratto</label><select id="dCtrType" class="sel w-full" onchange="toggleExpiry()"><option value="indeterminato">Indeterminato</option><option value="determinato">Determinato</option></select></div>
+      <div><label class="lbl">Tipo contratto</label><select id="dCtrType" class="sel w-full" data-act-change="call" data-call="toggleExpiry"><option value="indeterminato">Indeterminato</option><option value="determinato">Determinato</option></select></div>
       <div id="expiryField" style="display:none"><label class="lbl">Scadenza</label><input id="dExpiry" class="inp" type="date"></div>
       <div><label class="lbl">Transporter ID</label><input id="dTransporter" class="inp" autocomplete="off"></div>
       <div><label class="lbl">Device</label><input id="dDevice" class="inp" autocomplete="off"></div>
@@ -825,8 +825,8 @@
       <label style="grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="dAutofill" checked> Precompila i turni del mese in base ai giorni contrattuali</label>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" id="drvSave" onclick="saveDriver()">Salva</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" id="drvSave" data-act-click="call" data-call="saveDriver">Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
     </div>
   </div>
 </div>
@@ -834,17 +834,17 @@
 <!-- ── Scheduler: importa / esporta DAS ── -->
 <div class="overlay" id="impDas" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:620px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Importa DAS</h2>
     <p class="text-sm text-muted" style="margin:-6px 0 12px">Un DAS per riga, campi separati da <b>;</b> o <b>,</b> :<br>
       Cognome;Nome;Filiale;Servizio;Contratto;Tipo;Scadenza;Giorni;Codice;TransporterID;Device;DataAssunzione</p>
     <div style="display:grid;gap:10px">
-      <input type="file" accept=".csv,.txt" onchange="loadCsvFile(event)" class="inp">
+      <input type="file" accept=".csv,.txt" data-act-change="call" data-call="loadCsvFile" data-args="[&quot;@event&quot;]" class="inp">
       <textarea id="impText" class="inp" rows="9" placeholder="Rossi;Mario;DLO1;NEXT;21;indeterminato;;12345&#10;Bianchi;Laura;DLO7;SAME A;PTV 18h;determinato;2026-12-31;12"></textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="runImport()">⬆ Importa</button>
-        <button class="btn btn-ghost" onclick="exportDasCsv()">⬇ Esporta CSV attuali</button>
-        <button class="btn btn-ghost" onclick="closeAll()">Chiudi</button>
+        <button class="btn btn-primary" data-act-click="call" data-call="runImport">⬆ Importa</button>
+        <button class="btn btn-ghost" data-act-click="call" data-call="exportDasCsv">⬇ Esporta CSV attuali</button>
+        <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Chiudi</button>
       </div>
     </div>
   </div>
@@ -852,7 +852,7 @@
 
 <div class="overlay" id="filPick" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:280px;text-align:center">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Seleziona filiale</h2>
     <div id="filPickList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px"></div>
   </div>
@@ -861,7 +861,7 @@
 <!-- ── People: nuovo / modifica dipendente ── -->
 <div class="overlay" id="empEdit" role="dialog" aria-modal="true">
   <div class="obox emp-obox" style="max-width:720px">
-    <button class="obox-close" onclick="closeEmpForm()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeEmpForm">✕</button>
     <h2 id="empEditTitle">Nuovo dipendente</h2>
 
     <!-- Photo -->
@@ -871,9 +871,9 @@
         <label class="lbl">Foto dipendente</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <label class="btn btn-ghost sm" style="cursor:pointer">📷 Carica foto
-            <input type="file" id="empf_photo_file" accept="image/*" onchange="empPhotoPick(event)" hidden>
+            <input type="file" id="empf_photo_file" accept="image/*" data-act-change="call" data-call="empPhotoPick" data-args="[&quot;@event&quot;]" hidden>
           </label>
-          <button type="button" class="btn btn-ghost sm" id="empf_photo_rm" style="display:none" onclick="empPhotoClear()">Rimuovi</button>
+          <button type="button" class="btn btn-ghost sm" id="empf_photo_rm" style="display:none" data-act-click="call" data-call="empPhotoClear">Rimuovi</button>
         </div>
         <input type="hidden" id="empf_photo_url">
       </div>
@@ -884,10 +884,10 @@
     <div class="emp-grid">
       <div><label class="lbl">Cognome *</label><input id="empf_last_name" class="inp" autocomplete="off"></div>
       <div><label class="lbl">Nome *</label><input id="empf_first_name" class="inp" autocomplete="off"></div>
-      <div><label class="lbl">Codice dipendente</label><input id="empf_employee_code" class="inp" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_code"></span></div>
+      <div><label class="lbl">Codice dipendente</label><input id="empf_employee_code" class="inp" autocomplete="off" data-act-input="call" data-call="empValidate"><span class="field-err" id="err_code"></span></div>
       <div><label class="lbl">Transporter ID</label><input id="empf_transporter_id" class="inp" autocomplete="off"></div>
-      <div><label class="lbl">Email</label><input id="empf_email" class="inp" type="email" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_email"></span></div>
-      <div><label class="lbl">Telefono</label><input id="empf_phone" class="inp" autocomplete="off" oninput="empValidate()"><span class="field-err" id="err_phone"></span></div>
+      <div><label class="lbl">Email</label><input id="empf_email" class="inp" type="email" autocomplete="off" data-act-input="call" data-call="empValidate"><span class="field-err" id="err_email"></span></div>
+      <div><label class="lbl">Telefono</label><input id="empf_phone" class="inp" autocomplete="off" data-act-input="call" data-call="empValidate"><span class="field-err" id="err_phone"></span></div>
     </div>
 
     <!-- Section: Work -->
@@ -904,7 +904,7 @@
     <!-- Section: Contract -->
     <div class="emp-sect"><span class="emp-sect-t">📃 Contratto</span></div>
     <div class="emp-grid">
-      <div><label class="lbl">Tipo rapporto</label><select id="empf_rapporto" class="sel w-full" onchange="empOnRapporto()"><option value="det">Determinato</option><option value="ind">Indeterminato</option></select></div>
+      <div><label class="lbl">Tipo rapporto</label><select id="empf_rapporto" class="sel w-full" data-act-change="call" data-call="empOnRapporto"><option value="det">Determinato</option><option value="ind">Indeterminato</option></select></div>
       <div><label class="lbl">Contratto</label><select id="empf_contract_type_id" class="sel w-full"></select></div>
       <div><label class="lbl">Data assunzione</label><input id="empf_hire_date" class="inp" type="date"></div>
       <div><label class="lbl">Inizio contratto</label><input id="empf_contract_start_date" class="inp" type="date"></div>
@@ -913,9 +913,9 @@
 
     <div class="emp-form-actions">
       <div id="empEditMsg" class="text-sm" style="color:var(--bad);flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeEmpForm()">Annulla</button>
-      <button class="btn btn-ghost" onclick="saveEmployee(true)">＋ Salva e nuovo</button>
-      <button class="btn btn-primary" onclick="saveEmployee()">💾 Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeEmpForm">Annulla</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="saveEmployee" data-args="[true]">＋ Salva e nuovo</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveEmployee">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -923,7 +923,7 @@
 <!-- ── Absence editor ── -->
 <div class="overlay" id="absModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:640px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="absModalTitle">Nuova assenza</h2>
     <div class="abs-form">
       <div class="abs-f-full">
@@ -934,22 +934,22 @@
       <div id="absEmpSummary" class="abs-f-full" style="display:none"></div>
       <div class="abs-f-full">
         <label class="lbl">Tipo *</label>
-        <input id="absType" class="inp" list="absTypeList" autocomplete="off" oninput="absRefreshInfo()" placeholder="Ferie, Malattia, Permesso…">
+        <input id="absType" class="inp" list="absTypeList" autocomplete="off" data-act-input="call" data-call="absRefreshInfo" placeholder="Ferie, Malattia, Permesso…">
         <datalist id="absTypeList">
           <option>Ferie</option><option>Malattia</option><option>Infortunio</option>
           <option>Permesso</option><option>Permesso Sindacale</option><option>Congedo</option>
           <option>Aspettativa</option><option>Lutto</option>
         </datalist>
       </div>
-      <div><label class="lbl">Inizio *</label><input id="absStart" class="inp" type="date" onchange="absRefreshInfo()"></div>
-      <div><label class="lbl">Fine *</label><input id="absEnd" class="inp" type="date" onchange="absRefreshInfo()"></div>
+      <div><label class="lbl">Inizio *</label><input id="absStart" class="inp" type="date" data-act-change="call" data-call="absRefreshInfo"></div>
+      <div><label class="lbl">Fine *</label><input id="absEnd" class="inp" type="date" data-act-change="call" data-call="absRefreshInfo"></div>
       <div id="absCalc" class="abs-f-full" style="display:none"></div>
       <div class="abs-f-full"><label class="lbl">Note</label><textarea id="absNote" class="inp" rows="3" placeholder="Note opzionali…"></textarea></div>
     </div>
     <div class="abs-form-actions">
       <div id="absModalMsg" class="text-sm" style="color:var(--bad);flex:1"></div>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
-      <button class="btn btn-primary" onclick="saveAbsence()">💾 Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveAbsence">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -957,11 +957,11 @@
 <!-- ── Document upload (drag & drop) ── -->
 <div class="overlay" id="docModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:540px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="docModalTitle">Carica documento</h2>
-    <div id="docDrop" class="doc-dropzone" onclick="docPickFile()"
-         ondrop="docDropHandler(event)" ondragover="docDragOver(event)" ondragleave="docDragLeave(event)"></div>
-    <input type="file" id="docFileInput" accept=".pdf,image/jpeg,image/png" style="display:none" onchange="docFileChosen(event)">
+    <div id="docDrop" class="doc-dropzone" data-act-click="call" data-call="docPickFile"
+         data-act-drop="call" data-call="docDropHandler" data-args="[&quot;@event&quot;]" data-act-dragover="call" data-call="docDragOver" data-args="[&quot;@event&quot;]" data-act-dragleave="call" data-call="docDragLeave" data-args="[&quot;@event&quot;]"></div>
+    <input type="file" id="docFileInput" accept=".pdf,image/jpeg,image/png" style="display:none" data-act-change="call" data-call="docFileChosen" data-args="[&quot;@event&quot;]">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
       <div style="grid-column:1/-1"><label class="lbl">Dipendente *</label><select id="docEmp" class="sel w-full"></select></div>
       <div><label class="lbl">Categoria</label>
@@ -979,8 +979,8 @@
       <div><label class="lbl">Scadenza</label><input id="docExpiry" class="inp" type="date"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" onclick="saveDocument()">💾 Salva</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveDocument">💾 Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
       <div id="docModalMsg" class="text-sm" style="color:var(--bad)"></div>
     </div>
   </div>
@@ -989,7 +989,7 @@
 <!-- ── Shift template editor ── -->
 <div class="overlay" id="tplModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:620px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="tplModalTitle">Nuovo template</h2>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:12px">
       <div><label class="lbl">Nome *</label><input id="tplName" class="inp" autocomplete="off"></div>
@@ -1001,8 +1001,8 @@
     <label class="lbl" style="margin-top:14px;display:block">Griglia settimanale (Lun–Dom)</label>
     <div class="tpl-weekgrid" id="tplWeek"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" onclick="saveTemplate()">💾 Salva</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveTemplate">💾 Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
       <div id="tplModalMsg" class="text-sm" style="color:var(--bad)"></div>
     </div>
   </div>
@@ -1011,7 +1011,7 @@
 <!-- ── Apply template ── -->
 <div class="overlay" id="tplApplyModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:440px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Applica template</h2>
     <p class="text-sm text-muted" style="margin:8px 0 14px">
       Applica il pattern settimanale di “<b id="tplApplyName">—</b>” a tutti i DAS del mese
@@ -1020,8 +1020,8 @@
     <label class="lbl">Filiale</label>
     <select id="tplApplyBranch" class="sel w-full"></select>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" onclick="confirmApplyTemplate()">▶ Applica al mese</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="confirmApplyTemplate">▶ Applica al mese</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
     </div>
   </div>
 </div>
@@ -1029,7 +1029,7 @@
 <!-- ── Branch coverage detail ── -->
 <div class="overlay" id="branchDetailModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:640px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2 id="branchDetailTitle">Filiale</h2>
     <div id="branchDetailBody" style="margin-top:12px"></div>
   </div>
@@ -1040,8 +1040,8 @@
   <div class="ai-head">
     <div><h3>🤖 Assistente pianificazione</h3><p class="text-xs text-muted">Analisi continua · suggerimenti operativi</p></div>
     <div style="display:flex;gap:6px">
-      <button class="btn ghost sm" onclick="refreshAssistant()" title="Aggiorna">↻</button>
-      <button class="btn ghost sm" onclick="closeAssistant()" title="Chiudi">✕</button>
+      <button class="btn ghost sm" data-act-click="call" data-call="refreshAssistant" title="Aggiorna">↻</button>
+      <button class="btn ghost sm" data-act-click="call" data-call="closeAssistant" title="Chiudi">✕</button>
     </div>
   </div>
   <div class="ai-body" id="aiBody"></div>
@@ -1050,12 +1050,12 @@
 <!-- ── Schedule version history ── -->
 <div class="overlay" id="verModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:560px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>🗂 Cronologia versioni</h2>
     <p class="text-sm text-muted" style="margin:4px 0 12px">Salva istantanee del mese corrente e ripristinale quando serve.</p>
     <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px">
       <div style="flex:1"><label class="lbl">Etichetta (opzionale)</label><input id="verLabel" class="inp" placeholder="es. Bozza settimana 2"></div>
-      <button class="btn btn-primary" onclick="saveCurrentVersion()">💾 Salva versione</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveCurrentVersion">💾 Salva versione</button>
     </div>
     <div id="verList"></div>
   </div>
@@ -1064,7 +1064,7 @@
 <!-- ── Automatic shift generator ── -->
 <div class="overlay" id="genModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:660px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>⚙ Genera turni automaticamente</h2>
     <p class="text-sm text-muted" style="margin:4px 0 0">Motore a regole · nessun calcolo su ore. Basato su forecast, qualifiche, disponibilità, giorni contrattuali ed equità.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:14px 0">
@@ -1073,13 +1073,13 @@
       <div><label class="lbl">Servizio</label><select id="genService" class="sel"><option value="">Tutti</option></select></div>
       <div><label class="lbl">Celle</label><select id="genMode" class="sel"><option value="all">Rigenera tutto</option><option value="empty">Solo vuote</option></select></div>
       <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;padding-bottom:7px"><input type="checkbox" id="genLock"> Blocca turni manuali</label>
-      <button class="btn btn-primary" onclick="runGenerator()">▶ Genera anteprima</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="runGenerator">▶ Genera anteprima</button>
     </div>
     <div id="genResult"></div>
     <div id="genActions" style="display:none;gap:8px;margin-top:14px">
-      <button class="btn btn-primary" onclick="applyGenerator()">✔ Applica al planner</button>
-      <button class="btn btn-ghost" onclick="runGenerator()">↻ Rigenera</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Chiudi</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="applyGenerator">✔ Applica al planner</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="runGenerator">↻ Rigenera</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Chiudi</button>
     </div>
   </div>
 </div>
@@ -1087,14 +1087,14 @@
 <!-- ── Assign branches (filiali) to a user ── -->
 <div class="overlay" id="abModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:420px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Assegna filiali</h2>
     <p class="text-sm text-muted" style="margin:6px 0 12px"><b id="abUserName">—</b> · <span id="abUserRole">—</span><br>
       L'utente potrà gestire solo le filiali selezionate (turni e forecast).</p>
     <div id="abBranches" class="ab-branch-list"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" onclick="saveAssignBranches()">💾 Salva</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveAssignBranches">💾 Salva</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
       <div id="abMsg" class="text-sm" style="color:var(--bad)"></div>
     </div>
   </div>
@@ -1103,7 +1103,7 @@
 <!-- ── New role ── -->
 <div class="overlay" id="roleModal" role="dialog" aria-modal="true">
   <div class="obox" style="max-width:440px">
-    <button class="obox-close" onclick="closeAll()">✕</button>
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Nuovo ruolo</h2>
     <div style="display:grid;gap:10px;margin-top:12px">
       <div><label class="lbl">Codice ruolo *</label><input id="roleNewCode" class="inp" placeholder="es. supervisor" autocomplete="off"></div>
@@ -1111,8 +1111,8 @@
       <div><label class="lbl">Clona permessi da</label><select id="roleCloneFrom" class="sel w-full"></select></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-      <button class="btn btn-primary" onclick="saveNewRole()">💾 Crea</button>
-      <button class="btn btn-ghost" onclick="closeAll()">Annulla</button>
+      <button class="btn btn-primary" data-act-click="call" data-call="saveNewRole">💾 Crea</button>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
       <div id="roleModalMsg" class="text-sm" style="color:var(--bad)"></div>
     </div>
   </div>
@@ -1129,6 +1129,7 @@
 <script src="js/core/store.js"></script>
 <script src="js/core/cache.js"></script>
 <script src="js/core/guard.js"></script>
+<script src="js/core/actions.js"></script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/state.js"></script>

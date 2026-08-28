@@ -220,7 +220,7 @@ renderGrid = function() {
       var span=visDays.filter(function(k){return sunWeek(YM,k).start===wm.start;}).length;
       var wkA=(typeof weekFilterActive==='function'&&weekFilterActive(wm.start));
       html+='<div class="col-wk-h'+(curKey!==null?' wk-sep':'')+'" style="grid-column:span '+span+'">SETT. '+wm.label+
-        '<button class="colf-btn colx-btn'+(wkA?' active':'')+'" title="Filtro settimana (Excel)" onclick="weekFilterOpen(event,\''+wm.start+'\')">'+(wkA?'▼':'▾')+'</button></div>';
+        '<button class="colf-btn colx-btn'+(wkA?' active':'')+'" title="Filtro settimana (Excel)" data-act-click="weekFilter" data-wk="'+wm.start+'">'+(wkA?'▼':'▾')+'</button></div>';
       curKey=wm.start;
     }
   });
@@ -229,15 +229,15 @@ renderGrid = function() {
   html+='<div class="board-thead th-dt" style="grid-template-columns:'+colT+'">';
   var empA=(typeof empFilterActive==='function'&&empFilterActive())||(typeof colSortActive==='function'&&colSortActive());
   html+='<div class="col-emp-h col-emp-hf"><span>DAS / Servizio</span>'+
-    '<button class="colf-btn colx-btn'+(empA?' active':'')+'" title="Filtra / ordina dipendenti (Excel)" onclick="empFilterOpen(event)">'+(empA?'▼':'▾')+'</button></div>';
+    '<button class="colf-btn colx-btn'+(empA?' active':'')+'" title="Filtra / ordina dipendenti (Excel)" data-act-click="empFilter">'+(empA?'▼':'▾')+'</button></div>';
   visDays.forEach(function(d){
     var fActive=(typeof colFilterActive==='function'&&colFilterActive(d));
     html+='<div class="'+dayCls(d)+'" data-day="'+d+'"><span class="ddate">'+String(d).padStart(2,'0')+'/'+mm+'</span>'+
-      '<button class="colf-btn'+(fActive?' active':'')+'" title="Filtro colonna (Excel)" onclick="colFilterOpen(event,'+d+')">'+(fActive?'▼':'▾')+'</button></div>';
+      '<button class="colf-btn'+(fActive?' active':'')+'" title="Filtro colonna (Excel)" data-act-click="colFilter" data-day="'+d+'">'+(fActive?'▼':'▾')+'</button></div>';
   });
   var semA=(typeof semFilterActive==='function'&&semFilterActive());
   html+='<div class="col-tot-h col-tot-hf"><span>SEM</span>'+
-    '<button class="colf-btn colx-btn'+(semA?' active':'')+'" title="Ordina / filtra per metrica" onclick="semFilterOpen(event)">'+(semA?'▼':'▾')+'</button></div></div>';
+    '<button class="colf-btn colx-btn'+(semA?' active':'')+'" title="Ordina / filtra per metrica" data-act-click="semFilter">'+(semA?'▼':'▾')+'</button></div></div>';
   // 3) giorno
   html+='<div class="board-thead th-dw" style="grid-template-columns:'+colT+'">';
   html+='<div class="col-emp-h"></div>';
@@ -274,7 +274,7 @@ renderGrid = function() {
   function ghHTML(grp,collapsed){
     var st=getCLS(grp.cls),h='';
     h+='<div class="group-header-row'+(collapsed?' collapsed':'')+'" style="grid-template-columns:'+colT+'">';
-    h+='<div class="gh-cell" onclick="toggleGroup(\''+grp.cls+'\')"><span class="gh-arrow">▼</span><span class="gh-dot" style="background:'+st.fg+'"></span>'+esc(grp.name)+'<span class="gh-count">'+grp.drivers.length+'</span></div>';
+    h+='<div class="gh-cell" data-act-click="toggleGroup" data-cls="'+grp.cls+'"><span class="gh-arrow">▼</span><span class="gh-dot" style="background:'+st.fg+'"></span>'+esc(grp.name)+'<span class="gh-count">'+grp.drivers.length+'</span></div>';
     for(var gi=0;gi<visDays.length;gi++) h+='<div style="background:'+st.bg+';opacity:.3;border-right:1px solid var(--line)"></div>';
     h+='<div style="background:'+st.bg+';opacity:.3"></div></div>';
     return h;
@@ -284,7 +284,7 @@ renderGrid = function() {
     var initials=((dr.cognome||'')[0]||'').toUpperCase()+((dr.nome||'')[0]||'').toUpperCase();
     var wTotal=workedDays(dr,visDays),h='';
     h+='<div class="emp-board-row'+(window._schedSelEmp==dr.id?' emp-row-sel':'')+'" data-drv="'+dr.id+'" style="grid-template-columns:'+colT+'">';
-    h+='<div class="emp-cell" onclick="schedSelectEmp('+dr.id+');openOpsBottom('+dr.id+')" title="Dettaglio operativo">'+(viol?'<span class="viol-dot" title="7+ giorni consecutivi">⚠</span>':'')+
+    h+='<div class="emp-cell" data-act-click="empCell" data-id="'+dr.id+'" title="Dettaglio operativo">'+(viol?'<span class="viol-dot" title="7+ giorni consecutivi">⚠</span>':'')+
       '<div class="emp-avatar" style="background:'+st.av+'">'+esc(initials)+'</div>'+
       '<div style="min-width:0"><div class="emp-name-text">'+_hl(esc(dr.cognome)+' '+esc(dr.nome))+'</div>'+
       '<div class="emp-sub-text">'+_hl(esc(dr.filiale)+' · '+esc(dr.contratto||'—'))+'</div></div></div>';
@@ -294,7 +294,7 @@ renderGrid = function() {
       // expiry date reflects on the next render — no stored regeneration needed.
       if(typeof afterExpiry==='function'&&afterExpiry(dr,d)){
         var eT=nowISO===YM&&d===nowDay,eW=[0,6].includes(new Date(YM+'-'+String(d).padStart(2,'0')).getDay()),est=getCLS('off');
-        h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell sc-expired'+(eT?' today-sc':'')+(eW?' wend-sc':'')+wkSep(d)+'" title="Contratto scaduto — OFF automatico" onclick="cellExpiredMsg()">'+
+        h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell sc-expired'+(eT?' today-sc':'')+(eW?' wend-sc':'')+wkSep(d)+'" title="Contratto scaduto — OFF automatico" data-act-click="cellExpired">'+
           '<div class="shift-card sc-lock" style="background:'+est.bg+';color:'+est.fg+';border-color:'+est.br+'">OFF 🔒</div></div>';
         return;
       }
@@ -311,16 +311,18 @@ renderGrid = function() {
       h+='<div id="c_'+dr.id+'_'+d+'" class="shift-cell'+(isT?' today-sc':'')+(isW?' wend-sc':'')+(isV?' viol-sc':'')+(_w.length?' rulewarn-sc':'')+((_ed&&_ed.unsaved)?' sc-unsaved':'')+wkSep(d)+'"'+
         (_w.length?(' title="⚠ '+_wt+'"'):'')+
         (_rel?' style="position:relative"':'')+
-        ' onclick="cellClick(event,'+dr.id+','+d+')"'+
-        ' ondblclick="spOpenPanel('+dr.id+','+d+')"'+
-        ' oncontextmenu="event.shiftKey?cellPopBrush(event,\''+esc(code||'')+'\'):boardCtxOpen(event,'+dr.id+','+d+')"'+
-        ' ondragover="boardDragOver(event,this)"'+
-        ' ondragleave="boardDragLeave(this)"'+
-        ' ondrop="boardDrop(event,'+dr.id+','+d+')">';
+        ' data-id="'+dr.id+'" data-d="'+d+'" data-code="'+esc(code||'')+'"'+
+        ' data-act-click="cell"'+
+        ' data-act-dblclick="cell"'+
+        ' data-act-contextmenu="cell"'+
+        ' data-act-dragover="cell"'+
+        ' data-act-dragleave="cell"'+
+        ' data-act-drop="cell">';
       if(code){
         h+='<div class="shift-card" draggable="true"'+
-          ' ondragstart="boardDragStart(event,'+dr.id+','+d+')"'+
-          ' ondragend="boardDragEnd()"'+
+          ' data-id="'+dr.id+'" data-d="'+d+'"'+
+          ' data-act-dragstart="card"'+
+          ' data-act-dragend="card"'+
           ' style="background:'+cst.bg+';color:'+cst.fg+';border-color:'+cst.br+'"'+
           ' title="'+esc(codeLabel(code))+'">'+esc(code)+'</div>';
       }
@@ -594,6 +596,42 @@ document.addEventListener('keydown',function(e){
   if(e.ctrlKey&&(e.key==='k'||e.key==='K')){var gs=document.getElementById('globalSearch');if(gs){e.preventDefault();gs.focus();if(gs.select)gs.select();showKbdHint('🔍 Ricerca globale');}}
   if(e.ctrlKey&&e.key==='s'&&!inInput){e.preventDefault();saveAll(false);setSaveState('saved');showKbdHint('💾 Salvato');}
 });
+
+// ── Delegated event handlers (CSP Phase 2) ───────────────────────
+// The board's generated markup carries data-act-<event> attributes instead of
+// inline on*= handlers. These wrappers reproduce each former handler's exact
+// call — same function, args, event object, `this`/currentTarget (the matched
+// element, supplied by the dispatcher), and preventDefault/stopPropagation.
+// Globals (cellClick, colFilterOpen, …) resolve lazily at dispatch time, so
+// modules loaded after board.js are available by the time a user interacts.
+(function () {
+  if (typeof TurniActions === 'undefined') return;
+  var A = TurniActions;
+  // Header filter buttons — each reads ev.currentTarget for popup positioning.
+  A.on('click', 'weekFilter', function (e, el) { weekFilterOpen(e, el.dataset.wk); });
+  A.on('click', 'empFilter',  function (e) { empFilterOpen(e); });
+  A.on('click', 'colFilter',  function (e, el) { colFilterOpen(e, +el.dataset.day); });
+  A.on('click', 'semFilter',  function (e) { semFilterOpen(e); });
+  // Group header collapse toggle.
+  A.on('click', 'toggleGroup', function (e, el) { toggleGroup(el.dataset.cls); });
+  // Employee name cell: select the row + open the ops drawer.
+  A.on('click', 'empCell', function (e, el) { var id = +el.dataset.id; schedSelectEmp(id); openOpsBottom(id); });
+  // Post-expiry locked cell.
+  A.on('click', 'cellExpired', function () { cellExpiredMsg(); });
+  // Editable shift cell — all eight events it carried.
+  A.on('click',       'cell', function (e, el) { cellClick(e, +el.dataset.id, +el.dataset.d); });
+  A.on('dblclick',    'cell', function (e, el) { spOpenPanel(+el.dataset.id, +el.dataset.d); });
+  A.on('contextmenu', 'cell', function (e, el) {
+    if (e.shiftKey) cellPopBrush(e, el.dataset.code);
+    else boardCtxOpen(e, +el.dataset.id, +el.dataset.d);
+  });
+  A.on('dragover',  'cell', function (e, el) { boardDragOver(e, el); });
+  A.on('dragleave', 'cell', function (e, el) { boardDragLeave(el); });
+  A.on('drop',      'cell', function (e, el) { boardDrop(e, +el.dataset.id, +el.dataset.d); });
+  // Draggable shift card inside the cell.
+  A.on('dragstart', 'card', function (e, el) { boardDragStart(e, +el.dataset.id, +el.dataset.d); });
+  A.on('dragend',   'card', function () { boardDragEnd(); });
+})();
 
 // ── Dashboard JS (adapted) ────────────────────────────────────────
 

@@ -29,7 +29,7 @@ async function doGlobalSearch(q) {
     dd.innerHTML = r.results.length
       ? r.results.map(function(x){
           var u = esc(x.url||'#');
-          return '<a href="'+u+'" class="sd-item" onclick="return spaSearchGo(event,\''+u+'\')">'+
+          return '<a href="'+u+'" class="sd-item"'+actAttr('click','spaSearchGo',['@event', x.url||'#'])+'>'+
             '<span class="sd-icon">'+(icons[x.type]||'📌')+'</span>'+
             '<div class="flex-1"><div class="sd-title">'+esc(x.title)+'</div><div class="sd-sub">'+esc(x.subtitle||'')+'</div></div>'+
             '<span class="sd-type">'+x.type+'</span></a>';

@@ -108,7 +108,7 @@
       var cov = f > 0 ? Math.round(p / f * 100) : (p ? 100 : 0);
       dateRow += "<div class='fcd-cell'>" + String(s.day).padStart(2, '0') + '</div>';
       fRow += editable
-        ? "<div class='fcd-cell'><input type='number' min='0' step='1' class='fcd-inp' value='" + f + "' onchange='fcdSetForecast(" + s.day + ",this.value)' onkeydown='fcdKey(event," + idx + ")' onpaste='fcdPaste(event," + s.day + ")'></div>"
+        ? "<div class='fcd-cell'><input type='number' min='0' step='1' class='fcd-inp' value='" + f + "' "+actAttr('change','fcdSetForecast',[s.day,'@value'])+actAttr('keydown','fcdKey',['@event',idx])+actAttr('paste','fcdPaste',['@event',s.day])+"></div>"
         : "<div class='fcd-cell'>" + f + '</div>';
       pRow += "<div class='fcd-cell'>" + p + '</div>';
       dRow += "<div class='fcd-cell " + (dl < 0 ? 'd-neg' : dl > 0 ? 'd-pos' : 'd-zero') + "'>" + (dl > 0 ? '+' + dl : dl) + '</div>';

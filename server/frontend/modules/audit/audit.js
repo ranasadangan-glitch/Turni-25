@@ -38,9 +38,9 @@
     return `
       <div class="page-head"><div class="page-title">📝 Audit Log</div>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost sm" onclick="exportAudit('csv')">⬇ CSV</button>
-          <button class="btn btn-ghost sm" onclick="exportAudit('xls')">⬇ Excel</button>
-          <button class="btn btn-ghost sm" onclick="exportAudit('pdf')">🖨 PDF</button>
+          <button class="btn btn-ghost sm" ${actAttr('click','exportAudit',['csv'])}>⬇ CSV</button>
+          <button class="btn btn-ghost sm" ${actAttr('click','exportAudit',['xls'])}>⬇ Excel</button>
+          <button class="btn btn-ghost sm" ${actAttr('click','exportAudit',['pdf'])}>🖨 PDF</button>
         </div>
       </div>
       <div class="card card-pad mb-4">

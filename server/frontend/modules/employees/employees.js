@@ -63,7 +63,7 @@ function filterEmployees(q) {
 
   list.innerHTML = rows.map(r => {
     const cs = empContractStatus(r);
-    return `<div class="emp-row${r.id===_selectedEmpId?' selected':''}" onclick="openProfile(${r.id})">
+    return `<div class="emp-row${r.id===_selectedEmpId?' selected':''}" ${actAttr('click','openProfile',[r.id])}>
       <div class="emp-avatar${r.status==='inactive'?' inactive':''}">${empAvatarInner(r)}</div>
       <div style="flex:1;min-width:0">
         <div class="emp-name">${esc(r.last_name)} ${esc(r.first_name)}</div>
@@ -113,11 +113,11 @@ function renderEmpProfile(emp) {
     </div>
 
     <div class="profile-tabs">
-      <button class="profile-tab on" onclick="switchEmpTab('overview')">Panoramica</button>
-      <button class="profile-tab" onclick="switchEmpTab('schedule')">Turni recenti</button>
-      <button class="profile-tab" onclick="switchEmpTab('absences')">Assenze (${(emp.absences||[]).length})</button>
-      <button class="profile-tab" onclick="switchEmpTab('documents')">Documenti (${(emp.documents||[]).length})</button>
-      ${emp.open_disciplinary > 0 ? '<button class="profile-tab" onclick="switchEmpTab(\'disciplinary\')">Disciplinare</button>' : ''}
+      <button class="profile-tab on" ${actAttr('click','switchEmpTab',['overview'])}>Panoramica</button>
+      <button class="profile-tab" ${actAttr('click','switchEmpTab',['schedule'])}>Turni recenti</button>
+      <button class="profile-tab" ${actAttr('click','switchEmpTab',['absences'])}>Assenze (${(emp.absences||[]).length})</button>
+      <button class="profile-tab" ${actAttr('click','switchEmpTab',['documents'])}>Documenti (${(emp.documents||[]).length})</button>
+      ${emp.open_disciplinary > 0 ? '<button class="profile-tab"' + actAttr('click','switchEmpTab',['disciplinary']) + '>Disciplinare</button>' : ''}
     </div>
 
     <div id="tab-overview" class="tab-content on">
@@ -145,8 +145,8 @@ function renderEmpProfile(emp) {
         </div>` : ''}
       ${emp.notes ? `<div class="card card-pad"><div class="section-title text-sm mb-2">📝 Note</div><div class="text-sm">${esc(emp.notes)}</div></div>` : ''}
       <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-        ${USER.role==='admin'||USER.role==='hr_manager'?`<button class="btn btn-primary btn-sm" onclick="editEmployee(${emp.id})">✏️ Modifica</button>`:''}
-        ${USER.role==='admin'?`<button class="btn btn-ghost btn-sm" onclick="toggleEmpStatus(${emp.id},'${emp.status==='active'?'inactive':'active'}')">${emp.status==='active'?'Disattiva':'Attiva'}</button>`:''}
+        ${USER.role==='admin'||USER.role==='hr_manager'?`<button class="btn btn-primary btn-sm" ${actAttr('click','editEmployee',[emp.id])}>✏️ Modifica</button>`:''}
+        ${USER.role==='admin'?`<button class="btn btn-ghost btn-sm" ${actAttr('click','toggleEmpStatus',[emp.id, emp.status==='active'?'inactive':'active'])}>${emp.status==='active'?'Disattiva':'Attiva'}</button>`:''}
       </div>
     </div>
 
@@ -218,7 +218,8 @@ function renderEmpProfile(emp) {
 
 function switchEmpTab(name) {
   document.querySelectorAll('.profile-tab').forEach(b => {
-    b.classList.toggle('on', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+name+"'"));
+    var _s = b.getAttribute('data-args') || b.getAttribute('onclick') || '';
+    b.classList.toggle('on', _s.includes('"'+name+'"') || _s.includes("'"+name+"'"));
   });
   document.querySelectorAll('.tab-content').forEach(el => {
     el.classList.toggle('on', el.id === 'tab-' + name);
@@ -269,7 +270,7 @@ const EMP_DAYS = [{ n: 1, l: 'Lun' }, { n: 2, l: 'Mar' }, { n: 3, l: 'Mer' }, { 
 function buildEmpDayPicker(selected) {
   const sel = Array.isArray(selected) ? selected.map(Number) : [1, 2, 3, 4, 5];
   document.getElementById('empf_work_days').innerHTML = EMP_DAYS.map(d =>
-    `<button type="button" data-d="${d.n}" class="${sel.includes(d.n) ? 'on' : ''}" onclick="this.classList.toggle('on')">${d.l}</button>`
+    `<button type="button" data-d="${d.n}" class="${sel.includes(d.n) ? 'on' : ''}" data-act-click="call" data-call="_toggleOn">${d.l}</button>`
   ).join('');
 }
 function readEmpDayPicker() {

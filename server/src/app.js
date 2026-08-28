@@ -57,8 +57,13 @@ app.use(helmet({
       // blocks that <script> tag in any environment where CSP is enforced —
       // charts would just never render, with no visible error to the user
       // (only a CSP violation in the browser devtools console).
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-      scriptSrcAttr: ["'unsafe-inline'"],   // the app uses onclick=/onchange=/onsubmit= throughout
+      // CSP hardening (Phases 1–2): all inline <script> blocks were externalized
+      // to self-hosted .js files, and every inline on*= handler was migrated to
+      // delegated listeners (js/core/actions.js). So neither 'unsafe-inline' is
+      // needed any longer. cdnjs hosts Chart.js (Workspace/Analytics charts).
+      scriptSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
+      // No inline event-handler attributes remain, so forbid them outright.
+      scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
