@@ -15,6 +15,12 @@ const app = express();
 // cannot forge.
 app.set('trust proxy', 1);
 
+// ---- request correlation id + structured access logging ----
+// Assign/echo X-Request-ID on every request (before anything else runs, so even
+// the HTTPS redirect and error responses carry it) and emit one structured log
+// line per API request on finish. No secrets are logged — see middleware.
+app.use(require('./middleware/requestId'));
+
 // ---- (1) HTTPS only: redirect HTTP -> HTTPS, but ONLY when explicitly enabled ----
 // This used to trigger on NODE_ENV=production alone. That is correct on Render/
 // Railway (which always terminate TLS at their edge and reliably set
@@ -204,8 +210,14 @@ app.get('/app', (_req, res) => res.sendFile(path.join(FRONT, 'app.html')));
 app.get('*', (_req, res) => res.sendFile(path.join(FRONT, 'login.html')));
 
 // error handler
-app.use((err, _req, res, _next) => {
-  console.error(err);
+// Logs through the structured logger with the request's correlation id, method,
+// path and status (plus the error message + stack), so a 500 can be traced back
+// to the client's X-Request-ID. Does NOT log headers, cookies or the request
+// body, so Authorization/tokens/passwords never reach the logs. The JSON
+// response shape is unchanged.
+const logger = require('./utils/logger');
+app.use((err, req, res, _next) => {
+  logger.error('http', `[${req.id}] ${req.method} ${req.path} -> 500`, err);
   res.status(500).json({ error: err.message || 'Errore interno' });
 });
 
