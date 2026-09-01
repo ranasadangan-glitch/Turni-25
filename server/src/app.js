@@ -156,6 +156,13 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+// Any /api/* request that reached this point matched no API route above.
+// Return a JSON 404 instead of falling through to the SPA catch-all
+// (app.get('*') → login.html), which would answer a bad/removed endpoint
+// with 200 + HTML and silently break JSON clients. Placed after every API
+// route (incl. /api/health) and before the static/SPA handlers.
+app.all('/api/*', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
 // ---- serve the frontend ----
 // The login page IS the index: '/' serves login.html directly. After
 // authentication, app.html (the unified Workspace shell — Dashboard +
