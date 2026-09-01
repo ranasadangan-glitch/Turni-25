@@ -121,9 +121,12 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search',        require('./routes/search'));
 app.use('/api/roles',         require('./routes/roles'));
 
-// Load the DB-backed permission matrix into the RBAC cache at startup (falls
-// back to the hardcoded matrix until this resolves).
-require('./middleware/rbac').loadPermissions().catch(() => {});
+// Load the DB-backed permission matrix into the RBAC cache at startup, with a
+// bounded, non-blocking retry/backoff so a transient DB hiccup at boot self-
+// heals. Not awaited: the server starts listening immediately and falls back to
+// the hardcoded matrix until a load succeeds. /api/health reports readiness.
+const rbac = require('./middleware/rbac');
+rbac.loadPermissionsWithRetry().catch(() => {});
 
 // uploaded files (PDFs) — honor UPLOAD_DIR (e.g. a Railway/Render volume).
 // Protected: these are disciplinary/HR documents, so require a valid token
@@ -150,7 +153,14 @@ app.get('/api/health', async (_req, res) => {
       // DB reachable but schema not installed yet.
       return res.status(503).json({ ok: false, db: 'up', schema: 'missing', ts: new Date().toISOString() });
     }
-    res.json({ ok: true, db: 'up', ts: new Date().toISOString() });
+    // DB + schema are up. Also surface RBAC readiness: the app still functions
+    // via the hardcoded MATRIX fallback when the DB-backed matrix hasn't loaded,
+    // but that's a degraded state an operator should see — so fail the
+    // healthcheck (503) with a clear, non-secret status rather than hide it.
+    if (!rbac.rbacReady()) {
+      return res.status(503).json({ ok: false, db: 'up', rbac: 'not_ready', ts: new Date().toISOString() });
+    }
+    res.json({ ok: true, db: 'up', rbac: 'ready', ts: new Date().toISOString() });
   } catch (e) {
     res.status(503).json({ ok: false, db: 'down', ts: new Date().toISOString() });
   }
