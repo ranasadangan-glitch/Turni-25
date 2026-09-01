@@ -20,8 +20,9 @@ async function runFile(file) {
 // Only inserts when the users table is empty, so it never overwrites real data.
 async function ensureAdmin() {
   const username = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
-  const pw = process.env.ADMIN_PASSWORD || 'admin123';
+  const adminPassword = process.env.ADMIN_PASSWORD;
   const reset = process.env.RESET_ADMIN === 'true';
+  const isProd = process.env.NODE_ENV === 'production';
 
   // Does the admin account exist at all?
   const adm = await pool.query('SELECT id, password_hash, active FROM users WHERE lower(username)=$1', [username]);
@@ -30,6 +31,20 @@ async function ensureAdmin() {
   // Create if missing, or (re)set when RESET_ADMIN=true, or if the row is inactive.
   const needFix = !exists || reset || (exists && adm.rows[0].active === false);
   if (needFix) {
+    // In production we must NEVER provision the admin with the well-known default
+    // password: that ships a publicly guessable credential. Fail the migration
+    // clearly (the process exits non-zero, so `npm start` never starts serving)
+    // rather than create a predictable account. Set ADMIN_PASSWORD in the deploy
+    // env to unblock. Note: this only triggers when the admin actually needs to
+    // be (re)created — an already-provisioned prod instance boots unaffected.
+    if (isProd && !adminPassword) {
+      throw new Error(
+        'Refusing to create/reset the admin account with the default password in production. ' +
+        'Set ADMIN_PASSWORD (a strong secret) in the deployment environment and redeploy. ' +
+        'The password value is never logged.'
+      );
+    }
+    const pw = adminPassword || 'admin123';
     const hash = bcrypt.hashSync(pw, 10);
     await pool.query(
       `INSERT INTO users (username, password_hash, full_name, role, active)
