@@ -10,19 +10,24 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db/pool');
 const { audit, sha256 } = require('../middleware/auth');
+const { resetRate } = require('../config/security');
+const { rateLimitEventHandler } = require('../utils/securityLog');
 
 const RESET_TTL_MIN = +(process.env.RESET_TTL_MIN || 30);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Shared limiter for /forgot and /reset. A JSON `message` makes the 429 body
-// consistent with the rest of the API (the default is plain text). trustProxy
-// validation is suppressed because trust proxy is set globally (app.js).
+// Shared limiter for /forgot and /reset. Thresholds from the centralized
+// security config. A JSON `message` makes the 429 body consistent with the rest
+// of the API (the default is plain text); trustProxy validation is suppressed
+// because trust proxy is set globally (app.js). A 429 emits a structured
+// security event (no secrets).
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: +(process.env.RESET_RATE_MAX || 10),
+  windowMs: resetRate.windowMs,
+  max: resetRate.max,
   standardHeaders: true, legacyHeaders: false,
   validate: { trustProxy: false },
   message: { error: 'Troppe richieste. Riprova tra qualche minuto.' },
+  handler: rateLimitEventHandler('password_reset_rate_limited'),
 });
 
 // Password complexity: >=10 chars, upper, lower, digit.

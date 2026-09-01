@@ -3,19 +3,23 @@ const bcrypt = require('bcryptjs');
 const logger = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db/pool');
+const { loginRate, refreshRate } = require('../config/security');
+const { securityEvent, rateLimitEventHandler } = require('../utils/securityLog');
 const {
   signToken, auth, audit,
   issueRefreshToken, rotateRefreshToken, revokeRefreshToken,
   isLocked, recordAttempt, LOCK_MAX_FAILS,
 } = require('../middleware/auth');
 
-// IP-level rate limit (defence layer 1)
+// IP-level rate limit (defence layer 1). Thresholds from the centralized
+// security config; a 429 emits a structured security event (no secrets).
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: +(process.env.LOGIN_RATE_MAX || 20),
+  windowMs: loginRate.windowMs,
+  max: loginRate.max,
   standardHeaders: true, legacyHeaders: false,
   validate: { trustProxy: false }, // we set trust proxy globally; suppress the warning
   message: { error: 'Troppi tentativi di accesso. Riprova tra qualche minuto.' },
+  handler: rateLimitEventHandler('login_rate_limited'),
 });
 
 // IP-level rate limit for the token-refresh endpoint. /refresh is
@@ -24,11 +28,12 @@ const loginLimiter = rateLimit({
 // credential-bearing auth endpoint that previously had no limiter. Generous
 // enough for legitimate rotation across tabs/devices behind a shared NAT.
 const refreshLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: +(process.env.REFRESH_RATE_MAX || 60),
+  windowMs: refreshRate.windowMs,
+  max: refreshRate.max,
   standardHeaders: true, legacyHeaders: false,
   validate: { trustProxy: false }, // trust proxy is set globally; suppress the warning
   message: { error: 'Troppe richieste. Riprova tra qualche minuto.' },
+  handler: rateLimitEventHandler('refresh_rate_limited'),
 });
 
 // POST /api/auth/login  { username, password }
@@ -41,10 +46,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Account lockout check (defence layer 2) — skipped gracefully if table absent
     try {
-      if (await isLocked(username, req.ip))
+      if (await isLocked(username, req.ip)) {
+        securityEvent(req, 'login_locked', 'account_locked');
         return res.status(429).json({
           error: `Account bloccato dopo ${LOCK_MAX_FAILS} tentativi falliti. Riprova tra 15 minuti.`,
         });
+      }
     } catch { /* login_attempts table may not exist on first deploy; allow login */ }
 
     const { rows } = await pool.query(
@@ -53,6 +60,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const u = rows[0];
     if (!u || !u.active || !bcrypt.compareSync(String(password), u.password_hash)) {
       try { await recordAttempt(username, req.ip, false); } catch { /* non-fatal */ }
+      securityEvent(req, 'login_failed', 'invalid_credentials');
       return res.status(401).json({ error: 'Credenziali non valide' });
     }
 

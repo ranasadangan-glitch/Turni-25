@@ -120,8 +120,11 @@ async function audit(req, entity, entityId, action, detail) {
 }
 
 // ---- (4) login lockout helpers (DB-backed) ----
-const LOCK_WINDOW_MIN = +(process.env.LOCK_WINDOW_MIN || 15);
-const LOCK_MAX_FAILS  = +(process.env.LOCK_MAX_FAILS || 5);
+// Thresholds come from the centralized security config (single source of truth,
+// same env vars / defaults as before).
+const { lockout } = require('../config/security');
+const LOCK_WINDOW_MIN = lockout.windowMin;
+const LOCK_MAX_FAILS  = lockout.maxFails;
 
 async function isLocked(username, ip) {
   const { rows } = await pool.query(
