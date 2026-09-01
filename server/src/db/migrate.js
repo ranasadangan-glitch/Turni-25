@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { pool } = require('./pool');
+const { bcryptRounds } = require('../config/security');
 
 async function runFile(file) {
   const sql = fs.readFileSync(file, 'utf8');
@@ -45,7 +46,7 @@ async function ensureAdmin() {
       );
     }
     const pw = adminPassword || 'admin123';
-    const hash = bcrypt.hashSync(pw, 10);
+    const hash = bcrypt.hashSync(pw, bcryptRounds);
     await pool.query(
       `INSERT INTO users (username, password_hash, full_name, role, active)
        VALUES ($1, $2, 'Amministratore', 'admin', TRUE)

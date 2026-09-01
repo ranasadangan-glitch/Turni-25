@@ -56,6 +56,50 @@ test('config: defaults match the historical inline values', () => {
   }
 });
 
+test('config: bcryptRounds defaults to 10 when unset', () => {
+  const saved = process.env.BCRYPT_ROUNDS;
+  delete process.env.BCRYPT_ROUNDS;
+  try {
+    assert.equal(freshConfig().bcryptRounds, 10);
+  } finally {
+    if (saved === undefined) delete process.env.BCRYPT_ROUNDS; else process.env.BCRYPT_ROUNDS = saved;
+    freshConfig();
+  }
+});
+
+test('config: bcryptRounds honors a valid override', () => {
+  const saved = process.env.BCRYPT_ROUNDS;
+  process.env.BCRYPT_ROUNDS = '12';
+  try {
+    assert.equal(freshConfig().bcryptRounds, 12);
+  } finally {
+    if (saved === undefined) delete process.env.BCRYPT_ROUNDS; else process.env.BCRYPT_ROUNDS = saved;
+    freshConfig();
+  }
+});
+
+test('config: bcryptRounds rejects invalid/unsafe values (falls back to 10)', () => {
+  const saved = process.env.BCRYPT_ROUNDS;
+  // non-numeric, float, out-of-range low, out-of-range high, negative, empty
+  for (const bad of ['abc', '10.5', '3', '32', '-1', '0', ' ', '0x0a', '1e2']) {
+    process.env.BCRYPT_ROUNDS = bad;
+    assert.equal(freshConfig().bcryptRounds, 10, `should reject ${JSON.stringify(bad)}`);
+  }
+  if (saved === undefined) delete process.env.BCRYPT_ROUNDS; else process.env.BCRYPT_ROUNDS = saved;
+  freshConfig();
+});
+
+test('config: bcryptRounds accepts the boundary values 4 and 31', () => {
+  const saved = process.env.BCRYPT_ROUNDS;
+  try {
+    process.env.BCRYPT_ROUNDS = '4';  assert.equal(freshConfig().bcryptRounds, 4);
+    process.env.BCRYPT_ROUNDS = '31'; assert.equal(freshConfig().bcryptRounds, 31);
+  } finally {
+    if (saved === undefined) delete process.env.BCRYPT_ROUNDS; else process.env.BCRYPT_ROUNDS = saved;
+    freshConfig();
+  }
+});
+
 test('config: env overrides are honored', () => {
   const saved = { L: process.env.LOGIN_RATE_MAX, F: process.env.LOCK_MAX_FAILS };
   process.env.LOGIN_RATE_MAX = '7';
@@ -67,6 +111,23 @@ test('config: env overrides are honored', () => {
   } finally {
     if (saved.L === undefined) delete process.env.LOGIN_RATE_MAX; else process.env.LOGIN_RATE_MAX = saved.L;
     if (saved.F === undefined) delete process.env.LOCK_MAX_FAILS; else process.env.LOCK_MAX_FAILS = saved.F;
+    freshConfig();
+  }
+});
+
+test('bcrypt: default config produces a cost-10 hash (behavior preserved)', () => {
+  const bcrypt = require('bcryptjs');
+  const saved = process.env.BCRYPT_ROUNDS;
+  delete process.env.BCRYPT_ROUNDS;
+  try {
+    const { bcryptRounds } = freshConfig();
+    assert.equal(bcryptRounds, 10);
+    const hash = bcrypt.hashSync('some-password', bcryptRounds);
+    // bcryptjs encodes the cost as $2a$NN$ / $2b$NN$ — must be 10.
+    assert.match(hash, /^\$2[aby]\$10\$/);
+    assert.equal(bcrypt.compareSync('some-password', hash), true);
+  } finally {
+    if (saved === undefined) delete process.env.BCRYPT_ROUNDS; else process.env.BCRYPT_ROUNDS = saved;
     freshConfig();
   }
 });
