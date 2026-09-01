@@ -14,7 +14,16 @@ const { audit, sha256 } = require('../middleware/auth');
 const RESET_TTL_MIN = +(process.env.RESET_TTL_MIN || 30);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+// Shared limiter for /forgot and /reset. A JSON `message` makes the 429 body
+// consistent with the rest of the API (the default is plain text). trustProxy
+// validation is suppressed because trust proxy is set globally (app.js).
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: +(process.env.RESET_RATE_MAX || 10),
+  standardHeaders: true, legacyHeaders: false,
+  validate: { trustProxy: false },
+  message: { error: 'Troppe richieste. Riprova tra qualche minuto.' },
+});
 
 // Password complexity: >=10 chars, upper, lower, digit.
 function passwordIssues(pw) {

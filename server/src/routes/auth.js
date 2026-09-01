@@ -18,6 +18,19 @@ const loginLimiter = rateLimit({
   message: { error: 'Troppi tentativi di accesso. Riprova tra qualche minuto.' },
 });
 
+// IP-level rate limit for the token-refresh endpoint. /refresh is
+// unauthenticated and touches the DB on every call (token lookup + rotation),
+// so without a throttle it is an unbounded abuse/guessing surface — the only
+// credential-bearing auth endpoint that previously had no limiter. Generous
+// enough for legitimate rotation across tabs/devices behind a shared NAT.
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: +(process.env.REFRESH_RATE_MAX || 60),
+  standardHeaders: true, legacyHeaders: false,
+  validate: { trustProxy: false }, // trust proxy is set globally; suppress the warning
+  message: { error: 'Troppe richieste. Riprova tra qualche minuto.' },
+});
+
 // POST /api/auth/login  { username, password }
 router.post('/login', loginLimiter, async (req, res) => {
   try {
@@ -68,7 +81,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/refresh  { refresh }
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   try {
     const raw = req.body && req.body.refresh;
     if (!raw) return res.status(400).json({ error: 'Refresh token mancante' });
