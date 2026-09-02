@@ -17,6 +17,7 @@ var SECTION_TITLES = {
   reports:   'Report',
   settings:  'Impostazioni',
   forecast:  'Forecast',
+  codes:     'Codici',
 };
 // Which half of the scheduler section is showing: 'home' (overview strip) or
 // 'planning' (the planner board). Both live in #sec-scheduler.
@@ -279,6 +280,7 @@ function go(key) {
     case 'assenze':       navigate('absences'); if (typeof bootAbsences === 'function') bootAbsences(); break;
     case 'documenti':     navigate('documents'); if (typeof bootDocuments === 'function') bootDocuments(); break;
     case 'ruoli':         navigate('roles'); if (typeof bootRoles === 'function') bootRoles(); break;
+    case 'codici':        navigate('codes'); if (typeof bootCodes === 'function') bootCodes(); break;
     // Settings-hub shortcuts (single page, different tabs — not duplicate pages).
     case 'utenti':        navigate('settings'); if (typeof setCfgTab === 'function') setCfgTab('account'); break;
     case 'importa':       navigate('settings'); if (typeof setCfgTab === 'function') setCfgTab('io'); break;

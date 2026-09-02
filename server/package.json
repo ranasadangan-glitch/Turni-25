@@ -13,7 +13,7 @@
     "reset-admin": "node scripts/reset-admin.js",
     "hash": "node scripts/hash.js",
     "sync-codes": "node scripts/sync-shift-vocab.js",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1"
   },
   "engines": {
     "node": ">=18 <23"
