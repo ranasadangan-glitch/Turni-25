@@ -5,18 +5,32 @@ const { requirePermission } = require('../middleware/rbac');
 router.use(auth, loadScope);
 
 // GET /api/forecast?from=&to=&branch=  -> forecast rows
+// Forecast consolidation: reads the single source of truth (schedule_forecasts)
+// instead of the legacy HR `forecasts` table, keeping the exact HR response
+// shape. schedule_forecasts is keyed by (schedule_month, day_of_month,
+// branch_code, service_key); the lossless bridge maps those back to the HR
+// fields this response has always returned — service_types.code = service_key
+// (-> service_type_id/service_code/service_name), branches.code = branch_code
+// (-> branch_id), and schedule_month + day_of_month -> forecast_date (the same
+// expression v_forecast_days uses). The INNER JOIN on service_types keeps only
+// forecast rows that map to a real HR service, exactly as the FK-backed
+// `forecasts` read always did. Filters, scope, empty-result and 400 behavior,
+// column shape and (unspecified) ordering are preserved unchanged.
 router.get('/', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'from/to richiesti' });
   const params = [from, to];
-  let sql = `SELECT f.*, st.code AS service_code, st.name AS service_name, b.code AS branch_code
-               FROM forecasts f
-               JOIN service_types st ON st.id=f.service_type_id
-               JOIN branches b ON b.id=f.branch_id
-              WHERE f.forecast_date BETWEEN $1 AND $2`;
+  let sql = `SELECT sf.id, b.id AS branch_id, st.id AS service_type_id,
+                    (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date AS forecast_date,
+                    sf.qty, sf.updated_by, sf.updated_at,
+                    st.code AS service_code, st.name AS service_name, b.code AS branch_code
+               FROM schedule_forecasts sf
+               JOIN service_types st ON st.code = sf.service_key
+               JOIN branches b ON b.code = sf.branch_code
+              WHERE (sf.schedule_month + (sf.day_of_month - 1) * INTERVAL '1 day')::date BETWEEN $1 AND $2`;
   if (!req.scope.admin) {
     if (!req.scope.branches.length) return res.json([]);
-    params.push(req.scope.branches); sql += ` AND f.branch_id = ANY($${params.length})`;
+    params.push(req.scope.branches); sql += ` AND b.id = ANY($${params.length})`;
   }
   if (req.query.branch) { params.push(req.query.branch); sql += ` AND b.code=$${params.length}`; }
   const { rows } = await pool.query(sql, params);
@@ -24,12 +38,23 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/forecast  { branch_id, service_type_id, forecast_date, qty }
+// Forecast consolidation: this writes to schedule_forecasts — the single source
+// of truth read back through v_forecast_days — instead of the legacy HR
+// `forecasts` table. The HR request keys (branch_id, service_type_id,
+// forecast_date) are translated to the scheduler keys with the lossless bridge:
+// branches.code -> branch_code, service_types.code -> service_key, and
+// forecast_date -> (schedule_month, day_of_month). Both code columns are
+// NOT NULL UNIQUE, so the mapping is 1:1 and the ON CONFLICT target is
+// equivalent to the old (branch_id, service_type_id, forecast_date) key.
 router.put('/', requirePermission('forecast.manage'), async (req, res) => {
   const { branch_id, service_type_id, forecast_date, qty } = req.body || {};
   await pool.query(
-    `INSERT INTO forecasts (branch_id, service_type_id, forecast_date, qty, updated_by)
-     VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (branch_id, service_type_id, forecast_date)
+    `INSERT INTO schedule_forecasts (schedule_month, branch_code, service_key, day_of_month, qty, updated_by)
+     SELECT date_trunc('month', $3::date)::date, b.code, st.code,
+            EXTRACT(DAY FROM $3::date)::int, $4, $5
+       FROM branches b, service_types st
+      WHERE b.id = $1 AND st.id = $2
+     ON CONFLICT (schedule_month, branch_code, service_key, day_of_month)
      DO UPDATE SET qty=EXCLUDED.qty, updated_by=EXCLUDED.updated_by, updated_at=now()`,
     [branch_id, service_type_id, forecast_date, +qty || 0, req.user.username]);
   await audit(req, 'config', null, 'update', `Forecast ${forecast_date} = ${qty}`);
@@ -46,28 +71,17 @@ router.get('/dashboard', async (req, res) => {
   const params = [from, to];
   if (req.query.branch) params.push(req.query.branch);
 
-  // Scheduler-wins forecast reconciliation: schedule_forecasts (via v_forecast_days,
-  // keyed by service_key = service_types.code) is authoritative per (branch,
-  // service, date); HR forecasts fill only where the scheduler has no row — so
-  // this dashboard matches the scheduler board / coverage / KPI figures.
+  // Forecast comes from the single source of truth: schedule_forecasts via
+  // v_forecast_days, keyed by service_key = service_types.code, per (branch,
+  // service, date). (The legacy HR `forecasts` fallback leg was removed once the
+  // backfill copied every HR row into schedule_forecasts, making it redundant.)
   // planned = count of schedules whose shift_code maps to a service's default_shift_code
   const sql = `
-    WITH fc_hr AS (
-      SELECT f.branch_id, f.service_type_id, f.forecast_date AS d, sum(f.qty)::int qty
-        FROM forecasts f JOIN branches b ON b.id=f.branch_id
-       WHERE f.forecast_date BETWEEN $1 AND $2 ${branchFilter}
-       GROUP BY 1,2,3),
-    fc_sc AS (
+    WITH fc AS (
       SELECT vf.branch_id, st.id AS service_type_id, vf.forecast_date AS d, sum(vf.qty)::int qty
         FROM v_forecast_days vf JOIN service_types st ON st.code = vf.service_key
        WHERE vf.forecast_date BETWEEN $1 AND $2 ${branchFilterVf}
        GROUP BY 1,2,3),
-    fc AS (
-      SELECT branch_id, service_type_id, d, qty FROM fc_sc
-      UNION ALL
-      SELECT hr.branch_id, hr.service_type_id, hr.d, hr.qty FROM fc_hr hr
-        LEFT JOIN fc_sc s2 ON s2.branch_id=hr.branch_id AND s2.service_type_id=hr.service_type_id AND s2.d=hr.d
-       WHERE s2.service_type_id IS NULL),
     pl AS (
       SELECT e.branch_id, st.id AS service_type_id, s.work_date AS d, count(*) planned
         FROM v_schedule_days s

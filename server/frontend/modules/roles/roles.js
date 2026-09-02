@@ -68,7 +68,7 @@
     const roleCols = _roles.map((r) =>
       `<th style="text-align:center;min-width:90px">${esc(r.label || r.role)}
         <div class="text-xs text-muted" style="font-weight:400">${esc(r.role)}${r.builtin ? '' : ' ·<br>' + (_usage[r.role] || 0) + ' utenti'}</div>
-        ${r.builtin ? '' : `<button class="btn warn sm" style="margin-top:4px" onclick="deleteRoleUi('${esc(r.role)}')">🗑</button>`}
+        ${r.builtin ? '' : `<button class="btn warn sm" style="margin-top:4px" ${actAttr('click','deleteRoleUi',[r.role])}>🗑</button>`}
        </th>`).join('');
 
     let body = '';
@@ -79,7 +79,7 @@
           _roles.map((r) => {
             const dis = r.role === 'admin';
             return `<td style="text-align:center"><input type="checkbox" ${isChecked(r.role, perm) ? 'checked' : ''} ${dis ? 'disabled' : ''}
-              onchange="toggleRolePerm('${esc(r.role)}','${esc(perm)}',this.checked)"></td>`;
+              ${actAttr('change','toggleRolePerm',[r.role,perm,'@checked'])}></td>`;
           }).join('') + `</tr>`;
       });
     });
@@ -88,8 +88,8 @@
     root.innerHTML = `
       <div class="page-head"><div class="page-title">🔐 Ruoli &amp; Permessi</div>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost sm" onclick="openCreateRole()">＋ Nuovo ruolo</button>
-          <button class="btn btn-primary sm" id="rolesSaveBtn" ${dirtyRoles.length ? '' : 'disabled'} onclick="saveRoleChanges()">💾 Salva modifiche${dirtyRoles.length ? ' (' + dirtyRoles.length + ')' : ''}</button>
+          <button class="btn btn-ghost sm" ${actAttr('click','openCreateRole')}>＋ Nuovo ruolo</button>
+          <button class="btn btn-primary sm" id="rolesSaveBtn" ${dirtyRoles.length ? '' : 'disabled'} ${actAttr('click','saveRoleChanges')}>💾 Salva modifiche${dirtyRoles.length ? ' (' + dirtyRoles.length + ')' : ''}</button>
         </div>
       </div>
       <p class="text-sm text-muted" style="margin-bottom:12px">L'amministratore ha sempre accesso completo. Spunta i permessi per ogni ruolo, poi salva.</p>

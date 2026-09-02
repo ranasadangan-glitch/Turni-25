@@ -128,7 +128,18 @@ async function loadMonthFromDB(ym,branch){try{const data=await TurniApi.schedule
 // Refetch the roster from the employees-backed month endpoint (spec §14) so
 // employee create/edit/delete reflect in the scheduler without a page refresh.
 window.syncSchedulerFromDB=async function(){try{if(typeof state==="undefined"||!state)return;const br=teamFiliale||(filiali()[0]||"DLO1");await loadMonthFromDB(YM,br);if(typeof refreshAll==="function")refreshAll();}catch(e){}};
-async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";try{const ci=[];for(const[rawId,days]of Object.entries(state.schedule||{})){const d=state.drivers.find(x=>String(x.id)===String(rawId));for(const[day,code]of Object.entries(days||{})){if(code)ci.push({employee_id:d?d.id:+rawId,day:+day,shift_code:code,branch_code:(d&&d.filiale)||branch});}}const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved();}catch(e){console.warn("[DB]",e.message);window._schedSaving=false;const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
+async function saveMonthToDB(){if(!DB_SYNC)return;const branch=schedBranch()||filiali()[0]||"DLO1";
+  // Delta save (Perf #1): send ONLY the cells changed this session (_cellUnsaved),
+  // not the whole month. A cell still present in state.schedule is upserted; a
+  // cleared cell (absent from state.schedule) is sent with an empty shift_code so
+  // /entries/bulk DELETEs it — preserving clear behavior. Forecasts stay full
+  // (small: services×days). Only the sent keys are marked saved (mid-save edits stay pending).
+  const savedKeys=Object.keys(_cellUnsaved);
+  try{const drvById=new Map();for(const x of (state.drivers||[]))if(!drvById.has(String(x.id)))drvById.set(String(x.id),x);/* O(N) id→driver lookup; keeps first-match semantics */
+    const ci=[];
+    for(const key of savedKeys){const us=key.indexOf("_");const rawId=key.slice(0,us);const day=+key.slice(us+1);const d=drvById.get(String(rawId));const code=(state.schedule[rawId]||{})[day];ci.push({employee_id:d?d.id:+rawId,day:day,shift_code:code||"",branch_code:(d&&d.filiale)||branch});}
+    const fi=[];for(const[svcKey,days]of Object.entries(state.forecast||{})){for(const[day,qty]of Object.entries(days||{})){fi.push({service_key:svcKey,day:+day,qty:+qty||0});}}
+    await Promise.all([ci.length?TurniApi.schedulerBulkEntries(YM,branch,ci):Promise.resolve(),fi.length?TurniApi.schedulerBulkForecasts(YM,branch,fi):Promise.resolve()]);_schedMarkSaved(savedKeys);}catch(e){console.warn("[DB]",e.message);window._schedSaving=false;const el=document.getElementById("saveState");if(el)el.textContent="locale (DB offline)";}}
 let saveTimer=null;
 function saveAll(manual){
   // Write to localStorage as offline cache
@@ -183,8 +194,11 @@ window._schedRenderSave=function(){
 function _schedPendingBadge(){ window._schedRenderSave(); }
 // Called after a successful persist: clears the unsaved flags, refreshes the
 // per-cell markers and the pill. The by/when tooltip is kept for the session.
-function _schedMarkSaved(){
-  var ids=Object.keys(_cellUnsaved);_cellUnsaved={};
+function _schedMarkSaved(onlyKeys){
+  // Clear only the keys actually persisted (delta save passes the set it sent) so
+  // cells edited mid-save stay pending; with no argument, clear all (local mode).
+  var ids=onlyKeys||Object.keys(_cellUnsaved);
+  ids.forEach(function(k){delete _cellUnsaved[k];});
   ids.forEach(function(k){var p=k.split("_"),id=+p[0],d=+p[1];if(typeof markCellEdit==="function"){try{markCellEdit(id,d);}catch(e){}}});
   window._schedLastSavedAt=Date.now();
   window._schedSaving=false;
@@ -222,7 +236,7 @@ function scopeFil(){return isAdmin()?null:teamFiliale;}              /* null = t
 function inScope(d){const s=scopeFil();return!s||d.filiale===s;}
 function updateFilChip(){const b=document.getElementById("filChip"),t=document.getElementById("filChipTxt");if(t)t.textContent=teamFiliale||"—";if(b){b.title=teamLocked?"Filiale assegnata dall'Admin":"Cambia filiale";b.style.opacity=teamLocked?.85:1;}}
 function ensureTeamFiliale(){if(isAdmin())return;const list=acctFiliali();if(teamLocked){if(!list.includes(teamFiliale)&&list.length)teamFiliale=list[0];updateFilChip();return;}const all=filiali();if(!teamFiliale||!all.includes(teamFiliale)){teamFiliale=localStorage.getItem("turniDSP_teamFil");if(!teamFiliale||!all.includes(teamFiliale))teamFiliale=all[0]||"DLO1";localStorage.setItem("turniDSP_teamFil",teamFiliale);}updateFilChip();}
-function openFilialePick(){const list=teamLocked?acctFiliali():filiali();if(teamLocked&&list.length<=1){toast("Filiale assegnata: "+teamFiliale);return;}document.getElementById("filPickList").innerHTML=list.map(f=>"<button class='"+(f===teamFiliale?"sel":"")+"' style='background:var(--samea-bg);color:var(--samea)' onclick=\"pickFiliale('"+f+"')\">"+esc(f)+"</button>").join("");document.getElementById("filPick").classList.add("on");}
+function openFilialePick(){const list=teamLocked?acctFiliali():filiali();if(teamLocked&&list.length<=1){toast("Filiale assegnata: "+teamFiliale);return;}document.getElementById("filPickList").innerHTML=list.map(f=>"<button class='"+(f===teamFiliale?"sel":"")+"' style='background:var(--samea-bg);color:var(--samea)'"+actAttr('click','pickFiliale',[f])+">"+esc(f)+"</button>").join("");document.getElementById("filPick").classList.add("on");}
 function pickFiliale(f){teamFiliale=f;localStorage.setItem("turniDSP_teamFil",f);updateFilChip();closeAll();refreshAll();toast("Filiale: "+f);}
 function saveSession(){localStorage.setItem("turniDSP_session",JSON.stringify({role:ROLE,user:currentUser,filiale:teamFiliale,locked:teamLocked}));}
 function clearSession(){localStorage.removeItem("turniDSP_session");}
@@ -371,20 +385,24 @@ function _msOk(key,val){var a=_msArr(key);return !a.length||a.indexOf(val==null?
 function filteredDrivers(){
   const q=_fv("q").toLowerCase().trim();
   const terms=q?q.split(/\s+/):[];
-  return scopedActive()
-    .filter(d=>_msOk("fFiliale",d.filiale))
-    .filter(d=>_msOk("fService",d.service))
-    .filter(d=>_msOk("fContract",d.contratto||""))
-    .filter(d=>_msOk("fTeam",d.team||""))
-    .filter(d=>_msOk("fManager",d.manager||d.osm||""))
-    .filter(d=>_msOk("fStato",dayStatus(d,gridRefDay)))
-    .filter(d=>{if(!terms.length)return true;const h=_drvHay(d);return terms.every(t=>h.includes(t));})
-    // Excel-style column AutoFilters (AND). Day columns + Employee + Week + SEM.
-    .filter(d=>typeof colFilterMatch!=="function"||colFilterMatch(d.id))
-    .filter(d=>typeof empFilterMatch!=="function"||empFilterMatch(d.id))
-    .filter(d=>typeof weekFilterMatch!=="function"||weekFilterMatch(d.id))
-    .filter(d=>typeof semFilterMatch!=="function"||semFilterMatch(d))
-    .sort((a,b)=>a.cognome.localeCompare(b.cognome));
+  // Single pass (perf): same predicates, same order/short-circuit as the former
+  // chained .filter()s (all AND). Excel-style column AutoFilters guarded once.
+  const hasCol=typeof colFilterMatch==="function",hasEmp=typeof empFilterMatch==="function",
+        hasWeek=typeof weekFilterMatch==="function",hasSem=typeof semFilterMatch==="function";
+  return scopedActive().filter(d=>{
+    if(!_msOk("fFiliale",d.filiale))return false;
+    if(!_msOk("fService",d.service))return false;
+    if(!_msOk("fContract",d.contratto||""))return false;
+    if(!_msOk("fTeam",d.team||""))return false;
+    if(!_msOk("fManager",d.manager||d.osm||""))return false;
+    if(!_msOk("fStato",dayStatus(d,gridRefDay)))return false;
+    if(terms.length){const h=_drvHay(d);if(!terms.every(t=>h.includes(t)))return false;}
+    if(hasCol&&!colFilterMatch(d.id))return false;
+    if(hasEmp&&!empFilterMatch(d.id))return false;
+    if(hasWeek&&!weekFilterMatch(d.id))return false;
+    if(hasSem&&!semFilterMatch(d))return false;
+    return true;
+  }).sort((a,b)=>a.cognome.localeCompare(b.cognome));
 }
 function maybeOfferAuto(){const b=document.getElementById("autoBanner");if(!b)return;const _ms=baseScoped();const empty=_ms.every(d=>!state.schedule[d.id]||Object.keys(state.schedule[d.id]).length===0);if(_ms.length&&empty){b.style.display="flex";b.innerHTML="<b>Turni del mese vuoti.</b><span class='grow'>Generare automaticamente in base ai contratti dei DAS?</span><button class='btn amber' onclick='openAuto()'>Genera ora</button>";}else b.style.display="none";}
 
@@ -492,7 +510,7 @@ function renderCov(){
   const visWeeks=nWeeks>0?weeks.slice(covWeekIdx,covWeekIdx+nWeeks):weeks;
   const visDays=nWeeks>0?visWeeks.reduce((a,w)=>a.concat(w.days),[]):Array.from({length:daysInMonth(YM)},(_,i)=>i+1);
   const wn=document.getElementById("covWeekNav");
-  if(nWeeks>0&&weeks.length>nWeeks){const f=visWeeks[0],l=visWeeks[visWeeks.length-1];wn.style.display="inline-flex";wn.innerHTML="<button onclick='covPrevWeek()'>‹</button><span>"+fmtDM(YM,f.days[0])+"–"+fmtDM(YM,l.days[l.days.length-1])+"</span><button onclick='covNextWeek()'>›</button>";}else wn.style.display="none";
+  if(nWeeks>0&&weeks.length>nWeeks){const f=visWeeks[0],l=visWeeks[visWeeks.length-1];wn.style.display="inline-flex";wn.innerHTML="<button"+actAttr('click','covPrevWeek')+">‹</button><span>"+fmtDM(YM,f.days[0])+"–"+fmtDM(YM,l.days[l.days.length-1])+"</span><button"+actAttr('click','covNextWeek')+">›</button>";}else wn.style.display="none";
   const drivers=scopedActive().filter(d=>!fil||d.filiale===fil);
   let scopTot=0,giorniCrit=0;for(const d of visDays){let neg=0;for(const s of svs){const dl=deltaOf(s,d,drivers);if(dl<0)neg+=dl;}scopTot+=neg;if(neg<0)giorniCrit++;}
   const fcTot=svs.filter(s=>!s.minOf).reduce((a,s)=>{let t=0;for(const d of visDays)t+=forecastOf(s,d);return a+t;},0);
@@ -502,7 +520,7 @@ function renderCov(){
   if(visWeeks.length>1){h+="<tr class='wkrow'><th></th>";for(const w of visWeeks)h+="<th colspan='"+w.days.length+"' style='background:var(--ink);color:#fff;font-size:.7rem'>WK "+w.week+"</th>";h+="<th></th></tr>";}
   h+="<tr><th style='text-align:left;min-width:150px'>Service"+(fil?" · "+esc(fil):"")+"</th>";for(const d of visDays)h+="<th>"+d+"<br><small>"+dowName(YM,d)+"</small></th>";h+="<th>TOT</th></tr></thead><tbody>";h+="<tr class='sec'><td colspan='"+(visDays.length+2)+"'>"+(covMode==="delta"?"Delta = in turno − forecast":covMode==="harmony"?"Harmony — in turno":"Forecast"+(editable?" (modificabile)":" (sola lettura)"))+" · "+lab+"</td></tr>";
   if(!svs.length)h+="<tr><td colspan='"+(visDays.length+2)+"' style='padding:14px;color:var(--muted)'>Nessun servizio assegnato"+(fil?" alla filiale "+esc(fil):"")+". Aggiungilo in ⚙ Configurazione → Servizi &amp; Forecast.</td></tr>";
-  for(const s of svs){h+="<tr><td class='svc'>"+esc(s.label)+(s.minOf?" <small style='color:var(--muted)'>(auto MIN)</small>":"")+"</td>";let tot=0;for(const d of visDays){if(covMode==="forecast"){const v=forecastOf(s,d);tot+=v;h+=(s.minOf||!editable)?"<td class='d-zero'>"+v+"</td>":"<td><input type='number' min='0' value='"+v+"' onchange='setFc(\""+s.key+"\","+d+",this.value)'></td>";}else if(covMode==="harmony"){const v=harmonyOf(s,d,drivers);tot+=v;h+="<td>"+(v||"<span class='d-zero'>0</span>")+"</td>";}else{const v=deltaOf(s,d,drivers);tot+=v;h+="<td class='"+(v<0?"d-neg":v>0?"d-pos":"d-zero")+"'>"+v+"</td>";}}h+="<td><b>"+tot+"</b></td></tr>";}h+="</tbody>";document.getElementById("covTbl").innerHTML=h;}
+  for(const s of svs){h+="<tr><td class='svc'>"+esc(s.label)+(s.minOf?" <small style='color:var(--muted)'>(auto MIN)</small>":"")+"</td>";let tot=0;for(const d of visDays){if(covMode==="forecast"){const v=forecastOf(s,d);tot+=v;h+=(s.minOf||!editable)?"<td class='d-zero'>"+v+"</td>":"<td><input type='number' min='0' value='"+v+"'"+actAttr('change','setFc',[s.key,d,'@value'])+"></td>";}else if(covMode==="harmony"){const v=harmonyOf(s,d,drivers);tot+=v;h+="<td>"+(v||"<span class='d-zero'>0</span>")+"</td>";}else{const v=deltaOf(s,d,drivers);tot+=v;h+="<td class='"+(v<0?"d-neg":v>0?"d-pos":"d-zero")+"'>"+v+"</td>";}}h+="<td><b>"+tot+"</b></td></tr>";}h+="</tbody>";document.getElementById("covTbl").innerHTML=h;}
 function setFc(key,d,val){if(!state.forecast[key])state.forecast[key]={};state.forecast[key][d]=+val||0;dirty();logAction("Forecast "+key+" g"+d+" = "+(+val||0));renderCov();}
 const kpi=(v,l)=>"<div class='kpi'><b>"+v+"</b><span>"+l+"</span></div>";
 
@@ -511,9 +529,9 @@ function renderDas(){const q=(document.getElementById("qDas").value||"").toLower
   const byFil=filiali().map(f=>kpi(baseScoped().filter(d=>d.filiale===f).length,f)).join("");
   document.getElementById("dasKpis").innerHTML=kpi(baseScoped().length,"DAS attivi")+(scopeFil()?"":byFil)+(inact?kpi(inact,"Inattivi"):"")+(pend?kpi(pend,"In attesa"):"");
   document.getElementById("dasList").innerHTML=list.map(dasCard).join("")||"<p class='note'>Nessun DAS"+(scopeFil()?" per la filiale "+esc(scopeFil()):"")+".</p>";}
-function dasCard(d){const ctr=contracts().find(c=>c.code===d.contratto),ex=expiryStatus(d),wd=d.workDays.map(n=>(WEEKDAYS.find(w=>w.n===n)||{}).l).join(" ");const extra=(d.transporterId?" · ID: "+esc(d.transporterId):"")+(d.device?" · 📱 "+esc(d.device):"")+(d.hireDate?" · assunto "+fmtDate(d.hireDate):"");const inactive=d.status==="inactive";const stTag=inactive?"<span class='tag bad'>Inattivo</span>":"<span class='tag ok'>Attivo</span>";return "<div class='dcard'"+(inactive?" style='opacity:.6'":"")+"><div class='av'>"+esc((d.cognome[0]||"")+(d.nome[0]||""))+"</div><div style='flex:1'><div class='nm'>"+esc(d.cognome)+" "+esc(d.nome)+"</div><div class='meta'>"+esc(d.service)+" · "+esc(d.contratto||"—")+""+"<br>Giorni: "+esc(wd||"—")+" · cod. "+esc(d.defaultCode)+extra+"</div><div class='tags'><span class='tag fil'>"+esc(d.filiale)+"</span>"+stTag+"<span class='tag "+ex.cls+"'>"+ex.txt+"</span></div></div><div class='acts'><button onclick='openDriver("+d.id+")'>✏️ Modifica</button>"+(isAdmin()?"<button class='"+(inactive?"ap":"rj")+"' onclick='delDriver("+d.id+")'>"+(inactive?"↺ Riattiva":"⊘ Disattiva")+"</button>":"")+"</div></div>";}
+function dasCard(d){const ctr=contracts().find(c=>c.code===d.contratto),ex=expiryStatus(d),wd=d.workDays.map(n=>(WEEKDAYS.find(w=>w.n===n)||{}).l).join(" ");const extra=(d.transporterId?" · ID: "+esc(d.transporterId):"")+(d.device?" · 📱 "+esc(d.device):"")+(d.hireDate?" · assunto "+fmtDate(d.hireDate):"");const inactive=d.status==="inactive";const stTag=inactive?"<span class='tag bad'>Inattivo</span>":"<span class='tag ok'>Attivo</span>";return "<div class='dcard'"+(inactive?" style='opacity:.6'":"")+"><div class='av'>"+esc((d.cognome[0]||"")+(d.nome[0]||""))+"</div><div style='flex:1'><div class='nm'>"+esc(d.cognome)+" "+esc(d.nome)+"</div><div class='meta'>"+esc(d.service)+" · "+esc(d.contratto||"—")+""+"<br>Giorni: "+esc(wd||"—")+" · cod. "+esc(d.defaultCode)+extra+"</div><div class='tags'><span class='tag fil'>"+esc(d.filiale)+"</span>"+stTag+"<span class='tag "+ex.cls+"'>"+ex.txt+"</span></div></div><div class='acts'><button data-act-click='dasEdit' data-id='"+d.id+"'>✏️ Modifica</button>"+(isAdmin()?"<button class='"+(inactive?"ap":"rj")+"' data-act-click='dasDel' data-id='"+d.id+"'>"+(inactive?"↺ Riattiva":"⊘ Disattiva")+"</button>":"")+"</div></div>";}
 
-function buildDayPicker(elId,sel){document.getElementById(elId).innerHTML=WEEKDAYS.map(w=>"<button type='button' data-d='"+w.n+"' class='"+(sel.includes(w.n)?"on":"")+"' onclick='this.classList.toggle(\"on\")'>"+w.l+"</button>").join("");}
+function buildDayPicker(elId,sel){document.getElementById(elId).innerHTML=WEEKDAYS.map(w=>"<button type='button' data-d='"+w.n+"' class='"+(sel.includes(w.n)?"on":"")+"' data-act-click='dayToggle'>"+w.l+"</button>").join("");}
 function getDays(elId){return[...document.querySelectorAll("#"+elId+" button.on")].map(b=>+b.dataset.d);}
 function fillSelect(id,opts,val){const s=document.getElementById(id);s.innerHTML=opts.map(o=>"<option"+(o===val?" selected":"")+">"+esc(o)+"</option>").join("");}
 function openDriver(id){drvEditId=id;const d=id?state.drivers.find(x=>x.id===id):null;
@@ -555,7 +573,7 @@ async function delDriver(id){if(!isAdmin())return;const d=state.drivers.find(x=>
 function autofillDriver(id,workDays,code,offCode,mode){if(!Array.isArray(workDays))workDays=[];const days=daysInMonth(YM);if(!state.schedule[id])state.schedule[id]={};for(let d=1;d<=days;d++){const has=state.schedule[id][d];if(mode==="empty"&&has)continue;const cc=workDays.includes(dow(YM,d))?(code||"X"):offCode;if(cc)state.schedule[id][d]=cc;else delete state.schedule[id][d];}}
 
 /* ---------- APPROVAZIONI ---------- */
-function renderAppr(){const list=state.drivers.filter(d=>d.status==="pending");document.getElementById("apprList").innerHTML=list.length?list.map(d=>{const ctr=contracts().find(c=>c.code===d.contratto),wd=d.workDays.map(n=>(WEEKDAYS.find(w=>w.n===n)||{}).l).join(" ");return "<div class='dcard pending'><div class='av'>"+esc((d.cognome[0]||"")+(d.nome[0]||""))+"</div><div style='flex:1'><div class='nm'>"+esc(d.cognome)+" "+esc(d.nome)+" <span class='tag pend'>in attesa</span> <span class='tag fil'>"+esc(d.filiale)+"</span></div><div class='meta'>"+esc(d.service)+" · "+esc(d.contratto)+""+" · "+(d.ctrType==="determinato"?"det. "+fmtDate(d.expiry):"indet.")+"<br>Giorni: "+esc(wd)+" · cod. "+esc(d.defaultCode)+" · proposto da "+esc(d.addedBy||"team")+"</div></div><div class='acts'><button class='ap' onclick='approve("+d.id+")'>✓ Approva</button><button onclick='openDriver("+d.id+")'>✏️ Modifica</button><button class='rj' onclick='reject("+d.id+")'>✗ Rifiuta</button></div></div>";}).join(""):"<p class='note'>Nessuna proposta in attesa.</p>";}
+function renderAppr(){const list=state.drivers.filter(d=>d.status==="pending");document.getElementById("apprList").innerHTML=list.length?list.map(d=>{const ctr=contracts().find(c=>c.code===d.contratto),wd=d.workDays.map(n=>(WEEKDAYS.find(w=>w.n===n)||{}).l).join(" ");return "<div class='dcard pending'><div class='av'>"+esc((d.cognome[0]||"")+(d.nome[0]||""))+"</div><div style='flex:1'><div class='nm'>"+esc(d.cognome)+" "+esc(d.nome)+" <span class='tag pend'>in attesa</span> <span class='tag fil'>"+esc(d.filiale)+"</span></div><div class='meta'>"+esc(d.service)+" · "+esc(d.contratto)+""+" · "+(d.ctrType==="determinato"?"det. "+fmtDate(d.expiry):"indet.")+"<br>Giorni: "+esc(wd)+" · cod. "+esc(d.defaultCode)+" · proposto da "+esc(d.addedBy||"team")+"</div></div><div class='acts'><button class='ap'"+actAttr('click','approve',[d.id])+">✓ Approva</button><button"+actAttr('click','openDriver',[d.id])+">✏️ Modifica</button><button class='rj'"+actAttr('click','reject',[d.id])+">✗ Rifiuta</button></div></div>";}).join(""):"<p class='note'>Nessuna proposta in attesa.</p>";}
 function approve(id){if(!isAdmin())return;const d=state.drivers.find(x=>x.id===id);d.status="active";dirty();logAction("DAS approvato: "+d.cognome+" "+d.nome+" (proposto da "+(d.addedBy||"team")+")");updateApprBadge();renderAppr();renderDas();renderGrid();toast("DAS approvato");}
 function reject(id){if(!isAdmin())return;const d=state.drivers.find(x=>x.id===id);if(!confirm("Rifiutare "+d.cognome+" "+d.nome+"?"))return;state.drivers=state.drivers.filter(x=>x.id!==id);delete state.schedule[id];dirty();logAction("DAS rifiutato: "+d.cognome+" "+d.nome);updateApprBadge();renderAppr();toast("Proposta rifiutata");}
 
@@ -794,3 +812,18 @@ async function syncPull(){const url=apiUrl();if(!url)return;try{const r=await fe
 function apiUrl(){const u=document.getElementById("apiUrl").value.trim();if(u)localStorage.setItem("turniDSP_api",u);else toast("Inserisci l'URL dell'endpoint");return u;}
 
 /* ---------- util ---------- */
+
+// ── Delegated event handlers (CSP Phase 2) ───────────────────────
+// Only the LIVE inline handlers in this file are converted. dasCard (DAS
+// roster, driven by the live renderDas) and buildDayPicker (day chips built by
+// the live onContractChange) — same functions, args and `this` as before.
+// The old renderGrid/renderCfg paths and their editors are dead (shadowed by
+// board.js / config-ui.js) and are intentionally left untouched.
+(function () {
+  if (typeof TurniActions === 'undefined') return;
+  var A = TurniActions;
+  A.on('click', 'dasEdit', function (e, el) { openDriver(+el.dataset.id); });
+  A.on('click', 'dasDel',  function (e, el) { delDriver(+el.dataset.id); });
+  // Day chip: toggle its own "on" class (former inline this.classList.toggle).
+  A.on('click', 'dayToggle', function (e, el) { el.classList.toggle('on'); });
+})();

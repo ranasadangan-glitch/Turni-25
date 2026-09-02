@@ -49,7 +49,10 @@ const ALL_PERMISSIONS = Object.keys(MATRIX);
 let EFFECTIVE = null;
 
 // Load / reload the permission cache from the database. Called at startup and
-// after any change made through the roles API.
+// after any change made through the roles API. Never throws: on failure it
+// leaves EFFECTIVE as-is (or null → fallback to MATRIX) and returns false, so
+// a transient DB blip can never break authentication. Returns true once a
+// permission map is in place.
 async function loadPermissions() {
   try {
     const { pool } = require('../db/pool');
@@ -57,10 +60,36 @@ async function loadPermissions() {
     const m = {};
     for (const r of rows) { (m[r.permission] = m[r.permission] || new Set()).add(r.role); }
     EFFECTIVE = m;
+    return true;
   } catch (e) {
     // leave EFFECTIVE as-is (or null → fallback to MATRIX)
     require('../utils/logger').warn('rbac', 'loadPermissions failed: ' + e.message);
+    return false;
   }
+}
+
+// Startup loader with a bounded exponential backoff. Non-blocking: callers do
+// NOT await this (the server starts listening regardless), so a slow/failed DB
+// at boot never delays startup — RBAC transparently uses the MATRIX fallback
+// until a load succeeds. Stops as soon as EFFECTIVE is populated. Total worst
+// case ≈ 7.5s of background retries (500ms doubling over 5 attempts).
+async function loadPermissionsWithRetry(maxAttempts = 5, baseDelayMs = 500) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (await loadPermissions()) return true;
+    if (attempt < maxAttempts) {
+      const delay = baseDelayMs * 2 ** (attempt - 1);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  return false;
+}
+
+// Readiness probe for /api/health: true once the DB-backed permission matrix
+// has been loaded at least once. While false the app still works via MATRIX,
+// but health surfaces "not ready" so the operator/platform can see that the
+// DB-backed permissions never loaded. No secrets — a plain boolean.
+function rbacReady() {
+  return EFFECTIVE !== null;
 }
 
 function roleAllowed(permission, role) {
@@ -93,4 +122,4 @@ function requirePermission(permission) {
   };
 }
 
-module.exports = { ROLES, MATRIX, ALL_PERMISSIONS, roleAllowed, requireRole, requirePermission, loadPermissions };
+module.exports = { ROLES, MATRIX, ALL_PERMISSIONS, roleAllowed, requireRole, requirePermission, loadPermissions, loadPermissionsWithRetry, rbacReady };

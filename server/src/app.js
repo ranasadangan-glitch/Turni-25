@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const { pool } = require('./db/pool');
 
 const app = express();
 
@@ -13,6 +14,12 @@ const app = express();
 // client IP from the entry the trusted proxy appended, which the client
 // cannot forge.
 app.set('trust proxy', 1);
+
+// ---- request correlation id + structured access logging ----
+// Assign/echo X-Request-ID on every request (before anything else runs, so even
+// the HTTPS redirect and error responses carry it) and emit one structured log
+// line per API request on finish. No secrets are logged — see middleware.
+app.use(require('./middleware/requestId'));
 
 // ---- (1) HTTPS only: redirect HTTP -> HTTPS, but ONLY when explicitly enabled ----
 // This used to trigger on NODE_ENV=production alone. That is correct on Render/
@@ -56,8 +63,13 @@ app.use(helmet({
       // blocks that <script> tag in any environment where CSP is enforced —
       // charts would just never render, with no visible error to the user
       // (only a CSP violation in the browser devtools console).
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-      scriptSrcAttr: ["'unsafe-inline'"],   // the app uses onclick=/onchange=/onsubmit= throughout
+      // CSP hardening (Phases 1–2): all inline <script> blocks were externalized
+      // to self-hosted .js files, and every inline on*= handler was migrated to
+      // delegated listeners (js/core/actions.js). So neither 'unsafe-inline' is
+      // needed any longer. cdnjs hosts Chart.js (Workspace/Analytics charts).
+      scriptSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
+      // No inline event-handler attributes remain, so forbid them outright.
+      scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
@@ -115,9 +127,12 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search',        require('./routes/search'));
 app.use('/api/roles',         require('./routes/roles'));
 
-// Load the DB-backed permission matrix into the RBAC cache at startup (falls
-// back to the hardcoded matrix until this resolves).
-require('./middleware/rbac').loadPermissions().catch(() => {});
+// Load the DB-backed permission matrix into the RBAC cache at startup, with a
+// bounded, non-blocking retry/backoff so a transient DB hiccup at boot self-
+// heals. Not awaited: the server starts listening immediately and falls back to
+// the hardcoded matrix until a load succeeds. /api/health reports readiness.
+const rbac = require('./middleware/rbac');
+rbac.loadPermissionsWithRetry().catch(() => {});
 
 // uploaded files (PDFs) — honor UPLOAD_DIR (e.g. a Railway/Render volume).
 // Protected: these are disciplinary/HR documents, so require a valid token
@@ -126,8 +141,43 @@ const UPLOADS = process.env.UPLOAD_DIR || path.resolve(__dirname, '../uploads');
 const { auth } = require('./middleware/auth');
 app.use('/uploads', auth, express.static(UPLOADS, { dotfiles: 'deny', index: false }));
 
-// health
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+// health — verifies DB connectivity AND that the schema is present, so a
+// reachable-but-unmigrated instance (e.g. Render's first deploy skips the
+// pre-deploy migrate) fails the platform healthcheck instead of silently
+// receiving traffic it can't serve. A single, bounded catalog lookup covers
+// both: to_regclass() is a cheap system-catalog probe (no table scan) that
+// returns NULL — never an error — when the table is absent, so the query
+// succeeding proves connectivity and its boolean proves the schema exists.
+// `users` is the core table login depends on.
+app.get('/api/health', async (_req, res) => {
+  try {
+    const r = await Promise.race([
+      pool.query("SELECT to_regclass('public.users') IS NOT NULL AS ready"),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('db timeout')), 2500)),
+    ]);
+    if (!r.rows[0].ready) {
+      // DB reachable but schema not installed yet.
+      return res.status(503).json({ ok: false, db: 'up', schema: 'missing', ts: new Date().toISOString() });
+    }
+    // DB + schema are up. Also surface RBAC readiness: the app still functions
+    // via the hardcoded MATRIX fallback when the DB-backed matrix hasn't loaded,
+    // but that's a degraded state an operator should see — so fail the
+    // healthcheck (503) with a clear, non-secret status rather than hide it.
+    if (!rbac.rbacReady()) {
+      return res.status(503).json({ ok: false, db: 'up', rbac: 'not_ready', ts: new Date().toISOString() });
+    }
+    res.json({ ok: true, db: 'up', rbac: 'ready', ts: new Date().toISOString() });
+  } catch (e) {
+    res.status(503).json({ ok: false, db: 'down', ts: new Date().toISOString() });
+  }
+});
+
+// Any /api/* request that reached this point matched no API route above.
+// Return a JSON 404 instead of falling through to the SPA catch-all
+// (app.get('*') → login.html), which would answer a bad/removed endpoint
+// with 200 + HTML and silently break JSON clients. Placed after every API
+// route (incl. /api/health) and before the static/SPA handlers.
+app.all('/api/*', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // ---- serve the frontend ----
 // The login page IS the index: '/' serves login.html directly. After
@@ -160,8 +210,14 @@ app.get('/app', (_req, res) => res.sendFile(path.join(FRONT, 'app.html')));
 app.get('*', (_req, res) => res.sendFile(path.join(FRONT, 'login.html')));
 
 // error handler
-app.use((err, _req, res, _next) => {
-  console.error(err);
+// Logs through the structured logger with the request's correlation id, method,
+// path and status (plus the error message + stack), so a 500 can be traced back
+// to the client's X-Request-ID. Does NOT log headers, cookies or the request
+// body, so Authorization/tokens/passwords never reach the logs. The JSON
+// response shape is unchanged.
+const logger = require('./utils/logger');
+app.use((err, req, res, _next) => {
+  logger.error('http', `[${req.id}] ${req.method} ${req.path} -> 500`, err);
   res.status(500).json({ error: err.message || 'Errore interno' });
 });
 

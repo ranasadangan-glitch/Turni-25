@@ -20,7 +20,7 @@
     d.className = 'ops-drawer';
     d.innerHTML =
       '<div class="ops-head"><b>🎛 Centro operativo</b>' +
-      '<button class="ops-x" onclick="toggleOpsCenter()" title="Chiudi">✕</button></div>' +
+      '<button class="ops-x" ' + actAttr('click','toggleOpsCenter') + ' title="Chiudi">✕</button></div>' +
       '<div class="ops-body" id="opsBody"></div>';
     document.body.appendChild(d);
   }

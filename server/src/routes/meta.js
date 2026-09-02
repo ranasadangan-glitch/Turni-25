@@ -3,6 +3,7 @@ const router = require('express').Router();
 const { pool } = require('../db/pool');
 const logger = require('../utils/logger');
 const bcrypt = require('bcryptjs');
+const { bcryptRounds } = require('../config/security');
 const { auth, requireAdmin, loadScope, audit } = require('../middleware/auth');
 router.use(auth, loadScope);
 
@@ -43,7 +44,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     }
     const { rows } = await pool.query(
       'INSERT INTO users (username,password_hash,full_name,role,active) VALUES ($1,$2,$3,$4,TRUE) RETURNING id,username,role',
-      [username, bcrypt.hashSync(password, 10), full_name || null, safeRole]);
+      [username, bcrypt.hashSync(password, bcryptRounds), full_name || null, safeRole]);
     for (const b of (branch_ids||[])) await pool.query('INSERT INTO user_branches (user_id,branch_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [rows[0].id, b]);
     for (const t of (team_ids||[])) await pool.query('INSERT INTO user_teams (user_id,team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [rows[0].id, t]);
     await audit(req, 'user', rows[0].id, 'create', 'Utente: ' + username);
@@ -60,7 +61,7 @@ router.patch('/users/:id', requireAdmin, async (req, res) => {
     const { passwordIssues } = require('./password');
     const issues = passwordIssues(password);
     if (issues.length) return res.status(400).json({ error: 'La password deve contenere: ' + issues.join(', ') });
-    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [bcrypt.hashSync(password,10), req.params.id]);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [bcrypt.hashSync(password, bcryptRounds), req.params.id]);
     // Invalidate the target user's existing sessions, same as the self-service reset flow.
     await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [req.params.id]);
   }

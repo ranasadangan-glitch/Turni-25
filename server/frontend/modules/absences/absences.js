@@ -167,7 +167,7 @@
   function absShellHtml() {
     return `
       <div class="page-head"><div class="page-title">🌴 Assenze</div>
-        <button class="btn btn-primary" onclick="openAbsence()">＋ Nuova assenza</button>
+        <button class="btn btn-primary" ${actAttr('click','openAbsence')}>＋ Nuova assenza</button>
       </div>
       <div class="kpi-grid" id="absCards" style="margin-bottom:16px"></div>
       <div class="card card-pad mb-4">
@@ -179,22 +179,22 @@
           <div><label class="lbl">Filiale</label><select id="absfBranch" class="sel"><option value="">Tutte</option></select></div>
           <div><label class="lbl">Servizio</label><select id="absfService" class="sel"><option value="">Tutti</option></select></div>
           <div><label class="lbl">Mese</label><input id="absfMonth" type="month" class="inp"></div>
-          <div><label class="lbl">&nbsp;</label><button class="btn btn-ghost sm" onclick="absClearFilters()" title="Azzera filtri">↺</button></div>
+          <div><label class="lbl">&nbsp;</label><button class="btn btn-ghost sm" ${actAttr('click','absClearFilters')} title="Azzera filtri">↺</button></div>
         </div>
       </div>
       <div class="abs-toolbar">
         <div class="abs-viewseg">
-          <button id="absViewTable" class="on" onclick="absSetView('table')">☰ Tabella</button>
-          <button id="absViewCal" onclick="absSetView('calendar')">🗓 Calendario</button>
+          <button id="absViewTable" class="on" ${actAttr('click','absSetView',['table'])}>☰ Tabella</button>
+          <button id="absViewCal" ${actAttr('click','absSetView',['calendar'])}>🗓 Calendario</button>
         </div>
         <div id="absBulkBar" class="abs-bulkbar" style="display:none">
           <span id="absSelCount">0 selezionate</span>
-          <button class="btn ghost sm" onclick="absBulk('approved')">✔ Approva</button>
-          <button class="btn ghost sm" onclick="absBulk('rejected')">✖ Rifiuta</button>
-          <button class="btn warn sm" onclick="absBulk('delete')">🗑 Elimina</button>
+          <button class="btn ghost sm" ${actAttr('click','absBulk',['approved'])}>✔ Approva</button>
+          <button class="btn ghost sm" ${actAttr('click','absBulk',['rejected'])}>✖ Rifiuta</button>
+          <button class="btn warn sm" ${actAttr('click','absBulk',['delete'])}>🗑 Elimina</button>
         </div>
         <span class="abs-spacer"></span>
-        <button class="btn ghost sm" onclick="absExport()">⬇ Esporta CSV</button>
+        <button class="btn ghost sm" ${actAttr('click','absExport')}>⬇ Esporta CSV</button>
       </div>
       <div class="card card-pad" id="absBody"></div>`;
   }
@@ -358,10 +358,10 @@
   ];
   function ABS_ACTIONS(a) {
     var pending = (a.status || 'pending') === 'pending';
-    return (pending ? '<button class="btn ghost sm" title="Approva" onclick="setAbsStatus(' + a.id + ',\'approved\')">✔</button>' +
-      '<button class="btn ghost sm" title="Rifiuta" onclick="setAbsStatus(' + a.id + ',\'rejected\')">✖</button>' : '') +
-      '<button class="btn ghost sm" title="Modifica" onclick="openAbsence(' + a.id + ')">✏️</button>' +
-      '<button class="btn warn sm" title="Elimina" onclick="deleteAbs(' + a.id + ')">🗑</button>';
+    return (pending ? '<button class="btn ghost sm" title="Approva" ' + actAttr('click','setAbsStatus',[a.id,'approved']) + '>✔</button>' +
+      '<button class="btn ghost sm" title="Rifiuta" ' + actAttr('click','setAbsStatus',[a.id,'rejected']) + '>✖</button>' : '') +
+      '<button class="btn ghost sm" title="Modifica" ' + actAttr('click','openAbsence',[a.id]) + '>✏️</button>' +
+      '<button class="btn warn sm" title="Elimina" ' + actAttr('click','deleteAbs',[a.id]) + '>🗑</button>';
   }
   function renderAbsTable() {
     const body = document.getElementById('absBody'); if (!body) return;
@@ -394,15 +394,15 @@
         if (d.getFullYear() === y && d.getMonth() === m - 1) { (byDay[d.getDate()] = byDay[d.getDate()] || []).push(a); }
       }
     });
-    let h = `<div class="abs-cal-h"><button class="btn ghost sm" onclick="absCalNav(-1)">‹</button>
-      <b>${mName} ${y}</b><button class="btn ghost sm" onclick="absCalNav(1)">›</button></div>
+    let h = `<div class="abs-cal-h"><button class="btn ghost sm" ${actAttr('click','absCalNav',[-1])}>‹</button>
+      <b>${mName} ${y}</b><button class="btn ghost sm" ${actAttr('click','absCalNav',[1])}>›</button></div>
       <div class="abs-cal"><div class="abs-cal-dow">Dom</div><div class="abs-cal-dow">Lun</div><div class="abs-cal-dow">Mar</div><div class="abs-cal-dow">Mer</div><div class="abs-cal-dow">Gio</div><div class="abs-cal-dow">Ven</div><div class="abs-cal-dow">Sab</div>`;
     for (var i = 0; i < lead; i++) h += `<div class="abs-cal-cell abs-cal-empty"></div>`;
     for (var day = 1; day <= dim; day++) {
       var items = byDay[day] || [];
       h += `<div class="abs-cal-cell"><div class="abs-cal-num">${day}</div>` +
         items.slice(0, 4).map((a) => { var b = ABS_TYPES.find((t) => t.key === absTypeBucket(a.absence_type)) || ABS_TYPES[4];
-          return `<div class="abs-cal-item" style="background:${b.color}22;color:${b.color};border-left:3px solid ${b.color}" title="${esc(empName(a.employee_id) + ' · ' + a.absence_type)}" onclick="openAbsence(${a.id})">${b.icon || ''} ${esc(empName(a.employee_id).split(' ')[0])}</div>`; }).join('') +
+          return `<div class="abs-cal-item" style="background:${b.color}22;color:${b.color};border-left:3px solid ${b.color}" title="${esc(empName(a.employee_id) + ' · ' + a.absence_type)}" ${actAttr('click','openAbsence',[a.id])}>${b.icon || ''} ${esc(empName(a.employee_id).split(' ')[0])}</div>`; }).join('') +
         (items.length > 4 ? `<div class="abs-cal-more">+${items.length - 4}</div>` : '') + `</div>`;
     }
     body.innerHTML = h + `</div>`;
@@ -420,7 +420,7 @@
       if ((a.status || 'pending') === 'pending') pending++;
       if (b === 'ferie') ferie++; if (b === 'malattia') malattia++; if (b === 'infortunio') infortunio++;
     });
-    const card = (val, label, cls, filter) => `<div class="kpi-card ${cls || ''}" ${filter ? `style="cursor:pointer" onclick="absCardFilter('${filter}')"` : ''}><div class="kpi-val">${val}</div><div class="kpi-label">${label}</div></div>`;
+    const card = (val, label, cls, filter) => `<div class="kpi-card ${cls || ''}" ${filter ? `style="cursor:pointer" ${actAttr('click','absCardFilter',[filter])}` : ''}><div class="kpi-val">${val}</div><div class="kpi-label">${label}</div></div>`;
     el.innerHTML =
       card(absentToday, 'Assenti oggi', 'pri') +
       card(pending, 'Da approvare', 'warn', 'status:pending') +

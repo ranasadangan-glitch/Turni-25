@@ -10,11 +10,25 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db/pool');
 const { audit, sha256 } = require('../middleware/auth');
+const { resetRate, bcryptRounds } = require('../config/security');
+const { rateLimitEventHandler } = require('../utils/securityLog');
 
 const RESET_TTL_MIN = +(process.env.RESET_TTL_MIN || 30);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+// Shared limiter for /forgot and /reset. Thresholds from the centralized
+// security config. A JSON `message` makes the 429 body consistent with the rest
+// of the API (the default is plain text); trustProxy validation is suppressed
+// because trust proxy is set globally (app.js). A 429 emits a structured
+// security event (no secrets).
+const limiter = rateLimit({
+  windowMs: resetRate.windowMs,
+  max: resetRate.max,
+  standardHeaders: true, legacyHeaders: false,
+  validate: { trustProxy: false },
+  message: { error: 'Troppe richieste. Riprova tra qualche minuto.' },
+  handler: rateLimitEventHandler('password_reset_rate_limited'),
+});
 
 // Password complexity: >=10 chars, upper, lower, digit.
 function passwordIssues(pw) {
@@ -89,7 +103,7 @@ router.post('/reset', limiter, async (req, res) => {
     if (!t || t.used_at || new Date(t.expires_at) < new Date()) {
       return res.status(400).json({ error: 'Token non valido o scaduto' });
     }
-    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [bcrypt.hashSync(password, 10), t.user_id]);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [bcrypt.hashSync(password, bcryptRounds), t.user_id]);
     await pool.query('UPDATE password_reset_tokens SET used_at=now() WHERE id=$1', [t.id]);
     // Invalidate all existing sessions for safety.
     await pool.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [t.user_id]);

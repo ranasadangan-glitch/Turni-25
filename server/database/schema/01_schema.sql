@@ -159,18 +159,12 @@ CREATE TABLE IF NOT EXISTS shift_templates (
 );
 
 -- ---------- forecast ----------
-
-CREATE TABLE IF NOT EXISTS forecasts (
-  id              BIGSERIAL PRIMARY KEY,
-  branch_id       INT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
-  service_type_id INT NOT NULL REFERENCES service_types(id) ON DELETE CASCADE,
-  forecast_date   DATE NOT NULL,
-  qty             INT NOT NULL DEFAULT 0,        -- forecast routes
-  updated_by      TEXT,
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (branch_id, service_type_id, forecast_date)
-);
-CREATE INDEX IF NOT EXISTS idx_fc_date ON forecasts(forecast_date);
+-- NOTE: the legacy HR `forecasts` table (keyed by branch_id/service_type_id/
+-- forecast_date) was retired in migration 22_drop_forecasts.sql (Critical #2,
+-- final phase). schedule_forecasts (06_scheduler.sql) is the single source of
+-- truth for forecast quantities, exposed per-day via v_forecast_days (19). It is
+-- intentionally NOT recreated here so a fresh install never materialises the
+-- obsolete table.
 
 -- ---------- absences ----------
 

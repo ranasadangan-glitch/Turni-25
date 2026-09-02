@@ -37,3 +37,24 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+
+// ── App-shell delegated handlers (CSP Phase 2) ───────────────────
+// The three former inline handlers in app.html that weren't a simple single
+// call (multi-statement / conditional / blur timer). Same behavior; the matched
+// element is `this`/currentTarget and the event is passed through.
+(function () {
+  if (typeof TurniActions === 'undefined') return;
+  var A = TurniActions;
+  // Global search: hide the results dropdown shortly after focus leaves (blur →
+  // focusout, which bubbles). Delay lets a click on a result register first.
+  A.on('focusout', 'hideSearchDrop', function () {
+    setTimeout(function () {
+      var el = document.getElementById('searchDropdown');
+      if (el) el.style.display = 'none';
+    }, 200);
+  });
+  // Coverage filter select: stash the value then re-render coverage.
+  A.on('change', 'covFilChange', function (e, el) { window._covFil = el.value; renderCov(); });
+  // Team PIN field: Enter submits the login.
+  A.on('keydown', 'pinEnter', function (e) { if (e.key === 'Enter') doLogin(); });
+})();

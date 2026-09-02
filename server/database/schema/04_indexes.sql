@@ -15,8 +15,9 @@ CREATE INDEX IF NOT EXISTS idx_emp_team_status   ON employees(team_id, status);
 -- (idx_sched_code on the legacy schedules table removed in phase 4; the table
 --  is dropped in migration 20. schedule_entries carries its own indexes.)
 
--- Forecast lookups by branch+service over a date range
-CREATE INDEX IF NOT EXISTS idx_fc_branch_service ON forecasts(branch_id, service_type_id, forecast_date);
+-- (idx_fc_branch_service on the legacy `forecasts` table removed: the table is
+--  retired in migration 22_drop_forecasts.sql. schedule_forecasts carries its
+--  own indexes — idx_sf_month / idx_sf_branch, see 06_scheduler.sql.)
 
 -- Absences by date range (overlap queries)
 CREATE INDEX IF NOT EXISTS idx_abs_dates ON absences(start_date, end_date);
@@ -28,4 +29,3 @@ CREATE INDEX IF NOT EXISTS idx_disc_open ON disciplinary_actions(archived, actio
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(username);
 
 ANALYZE employees;
-ANALYZE forecasts;

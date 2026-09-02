@@ -58,13 +58,13 @@
 
   function tplShellHtml() {
     const presetCards = PRESETS.map((p, i) =>
-      `<button class="tpl-preset" onclick="openTemplateFromPreset(${i})" style="border-left:4px solid ${p.color}">
+      `<button class="tpl-preset" ${actAttr('click','openTemplateFromPreset',[i])} style="border-left:4px solid ${p.color}">
          <div style="font-weight:700">${esc(p.name)}</div>
          <div class="text-xs text-muted">${weekPreview(p.days)}</div>
        </button>`).join('');
     return `
       <div class="page-head"><div class="page-title">📋 Template Turni</div>
-        <button class="btn btn-primary" onclick="openTemplate()">＋ Nuovo template</button>
+        <button class="btn btn-primary" ${actAttr('click','openTemplate')}>＋ Nuovo template</button>
       </div>
       <div class="card card-pad mb-4">
         <div class="section-title mb-2">Preset rapidi</div>
@@ -117,10 +117,10 @@
         </div>
         <div class="tpl-week">${grid}</div>
         <div class="tpl-actions">
-          <button class="btn btn-primary sm" onclick="applyTemplate(${t.id})">▶ Applica</button>
-          <button class="btn ghost sm" onclick="openTemplate(${t.id})">✏️ Modifica</button>
-          <button class="btn ghost sm" onclick="duplicateTemplate(${t.id})">⧉ Duplica</button>
-          <button class="btn warn sm" onclick="deleteTemplate_(${t.id})">🗑</button>
+          <button class="btn btn-primary sm" ${actAttr('click','applyTemplate',[t.id])}>▶ Applica</button>
+          <button class="btn ghost sm" ${actAttr('click','openTemplate',[t.id])}>✏️ Modifica</button>
+          <button class="btn ghost sm" ${actAttr('click','duplicateTemplate',[t.id])}>⧉ Duplica</button>
+          <button class="btn warn sm" ${actAttr('click','deleteTemplate_',[t.id])}>🗑</button>
         </div>
       </div>`;
     }).join('');
@@ -146,7 +146,7 @@
 
     // colour swatches
     document.getElementById('tplColors').innerHTML = PALETTE.map((c) =>
-      `<button type="button" class="tpl-swatch${c === p.color ? ' on' : ''}" data-c="${c}" style="background:${c}" onclick="pickTplColor('${c}')"></button>`).join('');
+      `<button type="button" class="tpl-swatch${c === p.color ? ' on' : ''}" data-c="${c}" style="background:${c}" ${actAttr('click','pickTplColor',[c])}></button>`).join('');
 
     // service select
     const svcOpts = `<option value="">—</option>` + (_tplRefs.services || []).map((s) =>

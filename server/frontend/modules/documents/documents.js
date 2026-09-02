@@ -55,7 +55,7 @@
   function docShellHtml() {
     return `
       <div class="page-head"><div class="page-title">📁 Documenti</div>
-        <button class="btn btn-primary" onclick="openDocUpload()">⬆ Carica documento</button>
+        <button class="btn btn-primary" ${actAttr('click','openDocUpload')}>⬆ Carica documento</button>
       </div>
       <div class="kpi-grid" id="docCards" style="margin-bottom:16px"></div>
       <div class="card card-pad mb-4">
@@ -155,8 +155,8 @@
         <td style="white-space:nowrap;text-align:right">
           ${hasFile ? `<a class="btn ghost sm" title="Apri" href="${fileUrl}" target="_blank" rel="noopener">👁</a>
           <a class="btn ghost sm" title="Scarica" href="${fileUrl}" download>⬇</a>` : '<span class="text-muted text-xs">nessun file</span>'}
-          <button class="btn ghost sm" title="Sostituisci" onclick="replaceDoc(${d.id})">🔁</button>
-          <button class="btn warn sm" title="Elimina" onclick="deleteDoc(${d.id})">🗑</button>
+          <button class="btn ghost sm" title="Sostituisci" ${actAttr('click','replaceDoc',[d.id])}>🔁</button>
+          <button class="btn warn sm" title="Elimina" ${actAttr('click','deleteDoc',[d.id])}>🗑</button>
         </td></tr>`;
     }).join('');
   }

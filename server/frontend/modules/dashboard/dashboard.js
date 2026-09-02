@@ -60,15 +60,15 @@ function renderQuickActions() {
   if (!el) return;
   const isAdm = document.body.classList.contains('is-admin');
   const acts = [
-    { label: '📅 Apri planner',    go: 'goPlanning()' },
-    { label: '➕ Nuovo dipendente', go: "navigate('employees')" },
-    { label: '📈 Forecast',        go: "navigate('settings');setCfgTab('forecast')", admin: true },
-    { label: '📖 Legenda',         go: "navigate('settings');setCfgTab('codes')",    admin: true },
-    { label: '🏢 Filiali',         go: "navigate('settings');setCfgTab('filiali')",  admin: true },
-    { label: '📊 Report',          go: "navigate('reports')" },
+    { label: '📅 Apri planner',    act: 'dqPlanner' },
+    { label: '➕ Nuovo dipendente', act: 'dqNewEmp' },
+    { label: '📈 Forecast',        act: 'dqForecast', admin: true },
+    { label: '📖 Legenda',         act: 'dqLegend',   admin: true },
+    { label: '🏢 Filiali',         act: 'dqBranches', admin: true },
+    { label: '📊 Report',          act: 'dqReports' },
   ].filter(a => !a.admin || isAdm);
   el.innerHTML = acts.map(a =>
-    `<button class="btn btn-ghost sm" onclick="${a.go}">${a.label}</button>`
+    `<button class="btn btn-ghost sm" data-act-click="${a.act}">${a.label}</button>`
   ).join('');
 }
 
@@ -136,7 +136,7 @@ function renderTodayEmployees(d) {
     else if (r.is_absence) stato = '<span class="badge b-bad">Assente</span>';
     else if (r.is_off)     stato = '<span class="badge b-warn">Riposo</span>';
     const name = `${r.cognome || ''} ${r.nome || ''}`.trim() || '—';
-    return `<tr class="dsp-row" style="cursor:pointer" data-name="${esc(name)}" onclick="focusEmployeeInBoard(this.dataset.name)" title="Trova nel planner">
+    return `<tr class="dsp-row" style="cursor:pointer" data-name="${esc(name)}" data-act-click="focusEmp" title="Trova nel planner">
       <td><b>${esc(name)}</b></td>
       <td>${esc(r.branch_code || '—')}</td>
       <td>${r.shift_code ? esc(r.shift_code) : '<span class="text-muted">—</span>'}</td>
@@ -237,7 +237,7 @@ function renderDSP(kpiData) {
   tbody.innerHTML = dsp.map(r=>{
     totD+=(r.drivers||0); totP+=(r.present||0);
     const cov = r.drivers>0 ? Math.round(r.present/r.drivers*100) : 0;
-    return `<tr class="dsp-row" style="cursor:pointer" onclick="focusBranchInBoard('${esc(r.branch_code||'')}')" title="Filtra il planner su questa filiale">
+    return `<tr class="dsp-row" style="cursor:pointer" ${actAttr('click','focusBranchInBoard',[r.branch_code||''])} title="Filtra il planner su questa filiale">
       <td><b>${esc(r.branch_code||'—')}</b></td>
       <td>${r.drivers||0}</td>
       <td class="text-ok font-semi">${r.present||0}</td>
@@ -279,7 +279,7 @@ function renderBranchHeatmap(d) {
     const st = branchStatus(pct, required);
     const barW = required ? Math.min(100, Math.round(present / required * 100)) : 0;
     const mini = function (v, l) { return '<div class="bh-mini"><span class="bh-mini-v">' + v + '</span><span class="bh-mini-l">' + l + '</span></div>'; };
-    return '<div class="bh-card ' + st.cls + '" onclick="openBranchDetail(\'' + esc(b.branch_code) + '\')" title="Dettaglio filiale">' +
+    return '<div class="bh-card ' + st.cls + '"' + actAttr('click','openBranchDetail',[b.branch_code]) + ' title="Dettaglio filiale">' +
       '<div class="bh-card-head"><span class="bh-branch">' + esc(b.branch_code) + '</span>' +
       '<span class="bh-pct" style="color:' + st.color + '">' + (required ? pct + '%' : '—') + '</span></div>' +
       '<div class="bh-bar"><div class="bh-bar-fill" style="width:' + barW + '%;background:' + st.color + '"></div></div>' +
@@ -320,7 +320,7 @@ async function openBranchDetail(code) {
       '</div>' +
       '<div class="section-title text-sm mb-2">Copertura per servizio</div>' +
       '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Servizio</th><th>Forecast</th><th>Pianificati</th><th>Delta</th><th>Copertura</th></tr></thead><tbody>' + svcRows + '</tbody></table></div>' +
-      '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-primary sm" onclick="closeAll();focusBranchInBoard(\'' + esc(code) + '\')">📅 Apri nel planner</button></div>';
+      '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-primary sm" data-act-click="openInPlanner" data-code="' + esc(code) + '">📅 Apri nel planner</button></div>';
   } catch (e) {
     body.innerHTML = '<div style="color:var(--bad)">Errore: ' + esc(e.message) + '</div>';
   }
@@ -341,7 +341,7 @@ async function loadAlerts() {
     const rows = await TurniApi.expiryAlerts(60);
     const tbody = $d('alertsTbl').querySelector('tbody');
     if(!rows.length) { tbody.innerHTML='<tr><td colspan="5" class="text-muted" style="padding:12px;text-align:center">Nessuna scadenza nei prossimi 60 giorni</td></tr>'; return; }
-    tbody.innerHTML = rows.slice(0,25).map(r=>`<tr class="dsp-row" style="cursor:pointer" data-name="${esc(r.full_name||'')}" onclick="focusEmployeeInBoard(this.dataset.name)" title="Trova questo dipendente nel planner">
+    tbody.innerHTML = rows.slice(0,25).map(r=>`<tr class="dsp-row" style="cursor:pointer" data-name="${esc(r.full_name||'')}" data-act-click="focusEmp" title="Trova questo dipendente nel planner">
       <td><b>${esc(r.full_name||'—')}</b></td>
       <td>${esc(r.alert_type||'—')}</td>
       <td>${fmt(r.expiry_date)}</td>
@@ -488,3 +488,19 @@ async function bootWorkspaceOverview() {
 
 // ── Report charts (separate canvases in reports section) ──────────
 var _rptCharts = {};
+
+// ── Delegated handlers (CSP Phase 2) ─────────────────────────────
+// Quick-action buttons + branch/employee jumps that were inline on*= handlers.
+// Same calls, same order; the matched element supplies dataset args.
+(function () {
+  if (typeof TurniActions === 'undefined') return;
+  var A = TurniActions;
+  A.on('click', 'dqPlanner',  function () { goPlanning(); });
+  A.on('click', 'dqNewEmp',   function () { navigate('employees'); });
+  A.on('click', 'dqForecast', function () { navigate('settings'); setCfgTab('forecast'); });
+  A.on('click', 'dqLegend',   function () { navigate('settings'); setCfgTab('codes'); });
+  A.on('click', 'dqBranches', function () { navigate('settings'); setCfgTab('filiali'); });
+  A.on('click', 'dqReports',  function () { navigate('reports'); });
+  A.on('click', 'focusEmp',   function (e, el) { focusEmployeeInBoard(el.dataset.name); });
+  A.on('click', 'openInPlanner', function (e, el) { closeAll(); focusBranchInBoard(el.dataset.code); });
+})();

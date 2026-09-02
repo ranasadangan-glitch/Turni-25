@@ -19,7 +19,7 @@
     d.className = 'ops-bottom';
     d.innerHTML =
       '<div class="opsb-head"><b id="opsbTitle">Dettaglio dipendente</b>' +
-      '<button class="opsb-x" onclick="closeOpsBottom()" title="Chiudi">✕</button></div>' +
+      '<button class="opsb-x" data-act-click="call" data-call="closeOpsBottom" title="Chiudi">✕</button></div>' +
       '<div class="opsb-grid">' +
       '<div class="opsb-col" id="opsbEmp"></div>' +
       '<div class="opsb-col" id="opsbShift"></div>' +
@@ -83,10 +83,10 @@
     // Quick actions.
     document.getElementById('opsbActions').innerHTML = _h('⚡ Azioni rapide') +
       "<div class='opsb-btns'>" +
-      "<button class='btn ghost sm' onclick='editEmployee(" + dr.id + ")'>✏️ Modifica profilo</button>" +
-      "<button class='btn ghost sm' onclick='openProfile(" + dr.id + ")'>👤 Profilo completo</button>" +
-      "<button class='btn ghost sm' onclick='go(\"assenze\")'>🌴 Gestisci assenze</button>" +
-      "<button class='btn ghost sm' onclick='go(\"documenti\")'>📁 Documenti</button>" +
+      "<button class='btn ghost sm' data-act-click='call' data-call='editEmployee' data-args='[" + dr.id + "]'>✏️ Modifica profilo</button>" +
+      "<button class='btn ghost sm' data-act-click='call' data-call='openProfile' data-args='[" + dr.id + "]'>👤 Profilo completo</button>" +
+      "<button class='btn ghost sm' data-act-click='call' data-call='go' data-args='[&quot;assenze&quot;]'>🌴 Gestisci assenze</button>" +
+      "<button class='btn ghost sm' data-act-click='call' data-call='go' data-args='[&quot;documenti&quot;]'>📁 Documenti</button>" +
       '</div>';
   };
 

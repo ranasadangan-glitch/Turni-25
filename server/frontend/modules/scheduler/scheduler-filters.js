@@ -53,22 +53,22 @@
     h += "<div class='sfb-nav'>";
     // (The toolbar already has an "Oggi" button — no duplicate here.) Month/Year/
     // Week jumping stays, since the toolbar has no month/year picker.
-    h += "<select id='sfbMonth' class='sfb-sel' onchange='schedSetMonth(this.value)' title='Mese'></select>";
-    h += "<select id='sfbYear' class='sfb-sel' onchange='schedSetYear(this.value)' title='Anno'></select>";
-    h += "<select id='sfbWeek' class='sfb-sel' onchange='schedSetWeek(this.value)' title='Settimana'></select>";
+    h += "<select id='sfbMonth' class='sfb-sel'" + actAttr('change', 'schedSetMonth', ['@value']) + " title='Mese'></select>";
+    h += "<select id='sfbYear' class='sfb-sel'" + actAttr('change', 'schedSetYear', ['@value']) + " title='Anno'></select>";
+    h += "<select id='sfbWeek' class='sfb-sel'" + actAttr('change', 'schedSetWeek', ['@value']) + " title='Settimana'></select>";
     h += "</div><div class='sfb-div'></div>";
     // Employee search (§2): "Tutti i dipendenti" filter with live search. Reuses
     // the existing #q field + _drvHay() (name, surname, ID, transporter, branch,
     // service, contract) via schedSearchInput().
     h += "<div class='sfb-search'>" +
-      "<input type='search' id='sfbSearch' placeholder='🔍 Cerca tra tutti i dipendenti…' oninput='schedSearchInput(this.value)' onkeydown='schedSearchKey(event)' autocomplete='off' title='Nome, cognome, ID, badge, telefono, filiale, servizio, team (Ctrl+F)'>" +
-      "<button class='sfb-search-x' id='sfbSearchX' style='display:none' onclick='schedSearchClear()' title='Cancella (Esc)' tabindex='-1'>✕</button>" +
+      "<input type='search' id='sfbSearch' placeholder='🔍 Cerca tra tutti i dipendenti…'" + actAttr('input', 'schedSearchInput', ['@value']) + actAttr('keydown', 'schedSearchKey', ['@event']) + " autocomplete='off' title='Nome, cognome, ID, badge, telefono, filiale, servizio, team (Ctrl+F)'>" +
+      "<button class='sfb-search-x' id='sfbSearchX' style='display:none'" + actAttr('click', 'schedSearchClear') + " title='Cancella (Esc)' tabindex='-1'>✕</button>" +
       "</div>";
     h += "<div class='sfb-div'></div>";
     // Multi-select categorical filters
     CATS.forEach(function (c) {
       h += "<div class='sfb-ms' data-key='" + c.key + "'>" +
-        "<button class='sfb-ms-btn' onclick='schedToggleMS(event,\"" + c.key + "\")'>" +
+        "<button class='sfb-ms-btn'" + actAttr('click', 'schedToggleMS', ['@event', c.key]) + ">" +
         "<span class='sfb-ms-lbl'>" + c.label + "</span>" +
         "<span class='sfb-ms-badge' id='badge_" + c.key + "'>" + c.all + "</span>▾</button></div>";
     });
@@ -76,8 +76,8 @@
     // day-level filtering is now the per-column Excel AutoFilter (▼ on each day).
     h += "<div class='sfb-div'></div>";
     h += "<div class='sfb-count' id='sfbCount'>—</div>";
-    h += "<button class='sfb-reset colf-clearall' id='colfClearAll' style='display:none' onclick='colFilterClearAll()' title='Rimuovi tutti i filtri colonna'>✕ Filtri colonna <span class='colf-n'>0</span></button>";
-    h += "<button class='sfb-reset' onclick='schedResetFilters()' title='Rimuovi tutti i filtri'>↺ Cancella filtri</button>";
+    h += "<button class='sfb-reset colf-clearall' id='colfClearAll' style='display:none'" + actAttr('click', 'colFilterClearAll') + " title='Rimuovi tutti i filtri colonna'>✕ Filtri colonna <span class='colf-n'>0</span></button>";
+    h += "<button class='sfb-reset'" + actAttr('click', 'schedResetFilters') + " title='Rimuovi tutti i filtri'>↺ Cancella filtri</button>";
     h += "</div>";
     host.innerHTML = h;
     _fillNav();
@@ -149,13 +149,13 @@
     var sel = window._schedMS[key] || [];
     var opts = _opts(key);
     var pop = document.createElement('div'); pop.className = 'sfb-pop'; pop.id = 'sfbPop';
-    var h = "<div class='sfb-pop-search'><input type='search' placeholder='Filtra…' oninput='schedPopFilter(this.value)' autocomplete='off'></div>";
-    h += "<div class='sfb-pop-actions'><button onclick='schedMSall(\"" + key + "\",true)'>Tutti</button><button onclick='schedMSall(\"" + key + "\",false)'>Nessuno</button></div>";
+    var h = "<div class='sfb-pop-search'><input type='search' placeholder='Filtra…'" + actAttr('input', 'schedPopFilter', ['@value']) + " autocomplete='off'></div>";
+    h += "<div class='sfb-pop-actions'><button" + actAttr('click', 'schedMSall', [key, true]) + ">Tutti</button><button" + actAttr('click', 'schedMSall', [key, false]) + ">Nessuno</button></div>";
     h += "<div class='sfb-pop-list'>";
     if (!opts.length) h += "<div class='sfb-pop-empty'>Nessuna opzione</div>";
     opts.forEach(function (o) {
       var on = sel.indexOf(o.v) >= 0;
-      h += "<label class='sfb-opt' data-l='" + esc((o.l || '').toLowerCase()) + "'><input type='checkbox'" + (on ? ' checked' : '') + " onchange='schedMSpick(\"" + key + "\",\"" + esc(o.v).replace(/"/g, '&quot;') + "\",this.checked)'><span>" + esc(o.l) + "</span></label>";
+      h += "<label class='sfb-opt' data-l='" + esc((o.l || '').toLowerCase()) + "'><input type='checkbox'" + (on ? ' checked' : '') + actAttr('change', 'schedMSpick', [key, o.v, '@checked']) + "><span>" + esc(o.l) + "</span></label>";
     });
     h += "</div>";
     pop.innerHTML = h;

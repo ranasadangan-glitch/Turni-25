@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { pool } = require('./pool');
+const { bcryptRounds } = require('../config/security');
 
 async function runFile(file) {
   const sql = fs.readFileSync(file, 'utf8');
@@ -20,8 +21,9 @@ async function runFile(file) {
 // Only inserts when the users table is empty, so it never overwrites real data.
 async function ensureAdmin() {
   const username = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
-  const pw = process.env.ADMIN_PASSWORD || 'admin123';
+  const adminPassword = process.env.ADMIN_PASSWORD;
   const reset = process.env.RESET_ADMIN === 'true';
+  const isProd = process.env.NODE_ENV === 'production';
 
   // Does the admin account exist at all?
   const adm = await pool.query('SELECT id, password_hash, active FROM users WHERE lower(username)=$1', [username]);
@@ -30,7 +32,21 @@ async function ensureAdmin() {
   // Create if missing, or (re)set when RESET_ADMIN=true, or if the row is inactive.
   const needFix = !exists || reset || (exists && adm.rows[0].active === false);
   if (needFix) {
-    const hash = bcrypt.hashSync(pw, 10);
+    // In production we must NEVER provision the admin with the well-known default
+    // password: that ships a publicly guessable credential. Fail the migration
+    // clearly (the process exits non-zero, so `npm start` never starts serving)
+    // rather than create a predictable account. Set ADMIN_PASSWORD in the deploy
+    // env to unblock. Note: this only triggers when the admin actually needs to
+    // be (re)created — an already-provisioned prod instance boots unaffected.
+    if (isProd && !adminPassword) {
+      throw new Error(
+        'Refusing to create/reset the admin account with the default password in production. ' +
+        'Set ADMIN_PASSWORD (a strong secret) in the deployment environment and redeploy. ' +
+        'The password value is never logged.'
+      );
+    }
+    const pw = adminPassword || 'admin123';
+    const hash = bcrypt.hashSync(pw, bcryptRounds);
     await pool.query(
       `INSERT INTO users (username, password_hash, full_name, role, active)
        VALUES ($1, $2, 'Amministratore', 'admin', TRUE)
@@ -45,8 +61,17 @@ async function ensureAdmin() {
   }
 }
 
+// Serialize concurrent migration runners (multiple instances / restart storms)
+// with a Postgres session advisory lock. Idempotent SQL makes a partial-then-
+// retry safe; a crashed holder's session ends and auto-releases the lock.
+const MIGRATION_LOCK_KEY = 472025;
+let _lockClient = null;
+
 (async () => {
   try {
+    _lockClient = await pool.connect();
+    await _lockClient.query("SET lock_timeout = '60s'");   // fail visibly rather than hang if a stuck runner holds it
+    await _lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
     const root = path.resolve(__dirname, '../../database');
     // Schema is idempotent (CREATE/ALTER ... IF NOT EXISTS) so it is safe to
     // run on every deploy.
@@ -79,6 +104,14 @@ async function ensureAdmin() {
     // 20 — drop the legacy `schedules` table (phase 4). Guarded: migrates any
     // lingering rows into schedule_entries before dropping. Idempotent.
     await runFile(path.join(root, 'schema', '20_drop_schedules.sql'));
+    // 21 — backfill legacy HR `forecasts` into schedule_forecasts (single source
+    // of truth). Idempotent + scheduler-wins (ON CONFLICT DO NOTHING). Guarded so
+    // it is a no-op when the legacy table no longer exists (fresh install).
+    await runFile(path.join(root, 'schema', '21_forecast_backfill.sql'));
+    // 22 — retire the legacy `forecasts` table. MUST run after 21 (asserts every
+    // representable legacy row is already in schedule_forecasts, then drops).
+    // Idempotent and a no-op on a fresh install (table never created).
+    await runFile(path.join(root, 'schema', '22_drop_forecasts.sql'));
     // Seed the default scheduling rules once (skipped if any row exists).
     {
       const rc = await pool.query('SELECT count(*)::int AS c FROM scheduling_rules');
@@ -134,6 +167,8 @@ async function ensureAdmin() {
     // Always make sure a login exists (no-op if users already present).
     await ensureAdmin();
     console.log('Migration complete.');
+    await _lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]);
+    _lockClient.release(); _lockClient = null;
     await pool.end();
     process.exit(0);
   } catch (e) {
@@ -148,6 +183,9 @@ async function ensureAdmin() {
     if (/ECONNREFUSED|ENOTFOUND|timeout/i.test(e.message)) {
       console.error('Hint: cannot reach the database. Check DATABASE_URL host/port and that the DB is running.');
     }
+    // Destroy the lock client (truthy arg) so its session closes — releasing the
+    // advisory lock — and pool.end() won't hang on a checked-out connection.
+    try { if (_lockClient) _lockClient.release(new Error('migration failed')); } catch (_) { /* ignore */ }
     try { await pool.end(); } catch (_) { /* ignore */ }
     process.exit(1);
   }

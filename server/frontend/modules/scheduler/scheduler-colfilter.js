@@ -96,7 +96,7 @@
       var disp = v === '' ? '(Vuoto)' : v;
       var lab = (v !== '' && typeof codeLabel === 'function') ? (codeLabel(v) || '') : '';
       return "<label class='colf-opt' data-v='" + esc((disp + ' ' + lab).toLowerCase()) + "'>" +
-        "<input type='checkbox' value=\"" + esc(v) + "\"" + (checked ? ' checked' : '') + " onchange='colFilterRowChange()'>" +
+        "<input type='checkbox' value=\"" + esc(v) + "\"" + (checked ? ' checked' : '') + " data-act-change='call' data-call='colFilterRowChange'>" +
         "<span class='colf-code'>" + esc(disp) + "</span>" + (lab ? "<span class='colf-lbl'>" + esc(lab) + "</span>" : "") + "</label>";
     }).join('');
     var pop = document.createElement('div'); pop.className = 'colf-pop'; pop.id = 'colfPop';
@@ -109,11 +109,11 @@
     pop.style.inset = 'auto';
     pop.innerHTML =
       "<div class='colf-h'>Filtro colonna · <b>" + lbl + "</b></div>" +
-      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Cerca valori…' oninput='colFilterSearch(this.value)' autocomplete='off'></div>" +
-      "<label class='colf-all'><input type='checkbox' id='colfAll' onchange='colFilterToggleAll(this.checked)'><b>Seleziona tutto</b></label>" +
+      "<div class='colf-search'><span>🔍</span><input type='search' placeholder='Cerca valori…' data-act-input='call' data-call='colFilterSearch' data-args='[&quot;@value&quot;]' autocomplete='off'></div>" +
+      "<label class='colf-all'><input type='checkbox' id='colfAll' data-act-change='call' data-call='colFilterToggleAll' data-args='[&quot;@checked&quot;]'><b>Seleziona tutto</b></label>" +
       "<div class='colf-list' id='colfList'>" + (rows || "<div class='colf-empty'>Nessun valore</div>") + "</div>" +
-      "<div class='colf-foot'><button class='colf-clear' onclick='colFilterClear(" + day + ")'>Cancella filtro</button>" +
-      "<button class='colf-apply' onclick='colFilterApply()'>Applica</button></div>";
+      "<div class='colf-foot'><button class='colf-clear' data-act-click='call' data-call='colFilterClear' data-args='[" + day + "]'>Cancella filtro</button>" +
+      "<button class='colf-apply' data-act-click='call' data-call='colFilterApply'>Applica</button></div>";
     // Render in the browser TOP LAYER (Popover API) — above EVERY stacking
     // context, sticky header and overflow container, regardless of z-index. Falls
     // back to the z-index + <body> portal above when unsupported.
