@@ -65,6 +65,7 @@
         <button class="nav-item adminonly" data-nav="contratti-cfg" data-act-click="call" data-call="go" data-args="[&quot;contratti-cfg&quot;]">Contratti</button>
         <button class="nav-item" data-nav="team"         data-act-click="call" data-call="go" data-args="[&quot;team&quot;]">Team</button>
         <button class="nav-item adminonly" data-nav="ruoli" data-act-click="call" data-call="go" data-args="[&quot;ruoli&quot;]">Ruoli</button>
+        <button class="nav-item adminonly" data-nav="codici" data-act-click="call" data-call="go" data-args="[&quot;codici&quot;]">Codici</button>
       </div>
     </div>
 
@@ -687,6 +688,9 @@
       <!-- Ruoli & Permessi -->
       <div class="spa-section page-scroll" id="sec-roles" style="padding:22px 24px"></div>
 
+      <!-- Codici (gestione codici turno) -->
+      <div class="spa-section page-scroll adminonly" id="sec-codes" style="padding:22px 24px"></div>
+
       <!-- Forecast (top-level page) -->
       <div class="spa-section page-scroll" id="sec-forecast" style="padding:22px 24px"></div>
 
@@ -1169,6 +1173,7 @@
 <script src="modules/templates/templates.js"></script>
 <script src="modules/audit/audit.js"></script>
 <script src="modules/roles/roles.js"></script>
+<script src="modules/settings/codes-ui.js"></script>
 <!-- Cross-module wiring: connects data events to the existing refreshers.
      Loaded after all modules so their refresh functions exist. -->
 <script src="js/core/wire.js"></script>

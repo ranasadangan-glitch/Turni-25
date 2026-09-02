@@ -122,6 +122,7 @@ app.use('/api/meta', require('./routes/meta'));
 app.use('/api/xlsx', require('./routes/xlsx'));
 app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/scheduler', require('./routes/scheduler'));
+app.use('/api/codes',     require('./routes/codes'));
 app.use('/api/kpi',           require('./routes/kpi'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search',        require('./routes/search'));

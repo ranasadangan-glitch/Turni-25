@@ -120,6 +120,13 @@
     serviceTypes: () => cachedGet('meta/service-types', 120000, '/meta/service-types'),
     shiftCodes: () => cachedGet('meta/shift-codes', 120000, '/meta/shift-codes'),
     contractTypes: () => cachedGet('meta/contract-types', 120000, '/meta/contract-types'),
+
+    // codici — standalone shift-code CRUD (edits scheduler_config + resyncs
+    // shift_codes server-side). Writes require config.manage.
+    codes: (branch) => req('GET', '/codes' + (branch ? '?branch=' + encodeURIComponent(branch) : '')),
+    createCode: (c) => req('POST', '/codes', c),
+    updateCode: (code, c) => req('PUT', '/codes/' + encodeURIComponent(code), c),
+    deleteCode: (code, branch) => req('DELETE', '/codes/' + encodeURIComponent(code) + (branch ? '?branch=' + encodeURIComponent(branch) : '')),
     users: () => req('GET', '/meta/users'),
     createUser: (u) => req('POST', '/meta/users', u),
     updateUser: (id, u) => req('PATCH', '/meta/users/' + id, u),
