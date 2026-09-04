@@ -519,29 +519,45 @@ router.post('/config/import', requirePermission('config.manage'), async (req, re
         );
       }
     });
-    // Keep the derived reference tables (shift_codes/contract_types) in step
-    // with scheduler_config whenever codes/contracts were part of the import,
-    // so the platform side (e.g. the employee form's contract dropdown) sees
-    // edits immediately instead of only after the next `npm run sync-codes`.
+    // Keep the derived reference tables in step with scheduler_config. These run
+    // AFTER the (committed) scheduler_config write, so a sync failure never rolls
+    // back the config — the import is idempotent and safe to retry. But a sync
+    // failure MUST be surfaced: previously it was only warn-logged and the
+    // endpoint still returned ok:true, so the employee form's Filiale/Servizio/
+    // Codice tables could stay empty while the UI looked healthy. We now collect
+    // the failures and, if any REQUESTED sync failed, respond non-2xx so the
+    // client (and operator) see it.
     let vocab = null;
-    if (config.codes || config.contracts) {
+    let org = null;
+    const syncErrors = [];
+    if (config.codes || config.contracts) {                       // codes/contracts -> shift_codes/contract_types
       try {
         const { syncShiftVocab } = require('../../scripts/sync-shift-vocab');
         vocab = await syncShiftVocab(branch_code);
-      } catch (e) { logger.warn('scheduler', 'vocab sync after config import failed: ' + e.message); }
+      } catch (e) {
+        logger.error('scheduler', 'vocab sync after config import failed: ' + e.message);
+        syncErrors.push({ sync: 'shift', error: e.message });
+      }
     }
-    // Same single-source-of-truth propagation for Filiali -> branches and
-    // (forecast) Servizi -> service_types, so the employee form's Filiale/Servizio
-    // dropdowns reflect management edits immediately (upsert + deactivate-if-unused,
-    // never delete). See sync-org-vocab.js.
-    let org = null;
-    if (config.filiali || config.filDetails || config.services) {
+    if (config.filiali || config.filDetails || config.services) { // filiali/services -> branches/service_types
       try {
         const { syncOrgVocab } = require('../../scripts/sync-org-vocab');
         org = await syncOrgVocab(branch_code);
-      } catch (e) { logger.warn('scheduler', 'org sync after config import failed: ' + e.message); }
+      } catch (e) {
+        logger.error('scheduler', 'org sync after config import failed: ' + e.message);
+        syncErrors.push({ sync: 'org', error: e.message });
+      }
     }
     await audit(req, 'config', null, 'update', `Config import ${branch_code}: ${keys.length} keys`);
+    if (syncErrors.length) {
+      // scheduler_config committed, but a reference-table sync failed → 502 so the
+      // caller does not treat master-data population as successful. Retryable.
+      return res.status(502).json({
+        ok: false, imported: keys.length, vocab, org, syncErrors,
+        error: 'Sincronizzazione tabelle di riferimento fallita: ' +
+          syncErrors.map((s) => s.sync + ': ' + s.error).join('; '),
+      });
+    }
     res.json({ ok: true, imported: keys.length, vocab, org });
   } catch (e) { logger.error('scheduler', 'config import error', e); res.status(500).json({ error: e.message }); }
 });
