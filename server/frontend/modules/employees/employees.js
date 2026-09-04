@@ -244,11 +244,11 @@ async function toggleEmpStatus(id, newStatus) {
 // We only cache the refs briefly and drop the cache whenever config/meta changes
 // (via AppBus), so management edits show up without a reload.
 let _empRefs = null;
+let _refsBootstrapTried = false;   // one-shot guard: never re-import in a loop
 if (window.AppBus) AppBus.on('data:changed', function (e) {
   if (e && /config|branch|service|meta|shift|contract/i.test(e.path || '')) _empRefs = null;
 });
-async function loadEmpRefs() {
-  if (_empRefs) return _empRefs;
+async function fetchEmpRefs() {
   const [branches, services, contracts, teams, shiftCodes] = await Promise.all([
     TurniApi.branches().catch(() => []),
     TurniApi.serviceTypes().catch(() => []),
@@ -257,7 +257,35 @@ async function loadEmpRefs() {
     TurniApi.shiftCodes().catch(() => []),
   ]);
   // Respect the active flag (removed Filiali are deactivated, not deleted).
-  _empRefs = { branches: (branches || []).filter((b) => b.active !== false), services, contracts, teams, shiftCodes };
+  return { branches: (branches || []).filter((b) => b.active !== false), services, contracts, teams, shiftCodes };
+}
+async function loadEmpRefs() {
+  if (_empRefs) return _empRefs;
+  let refs = await fetchEmpRefs();
+  // One-shot bootstrap: a freshly-migrated DB has empty branches/service_types/
+  // shift_codes, which makes this form's Filiale/Servizio/Codice dropdowns empty.
+  // The canonical config lives in this browser (state.config); push it ONCE
+  // through the existing authenticated import path so the server re-derives the
+  // reference tables (syncOrgVocab/syncShiftVocab). No hardcoded lists, no second
+  // source of truth, no loop (guarded), and errors are surfaced — never silent.
+  if (!_refsBootstrapTried && (!refs.branches || refs.branches.length === 0)) {
+    _refsBootstrapTried = true;
+    var cfg = (typeof state !== 'undefined' && state && state.config) || null;
+    var branch = cfg && Array.isArray(cfg.filiali) && cfg.filiali.length ? cfg.filiali[0] : null;
+    if (cfg && branch) {
+      try {
+        await TurniApi.schedulerImportConfig(branch, cfg);   // throws on non-2xx (incl. the new 502 sync-failure)
+        if (window.AppCache) { try { AppCache.invalidate('meta'); } catch (e) {} }
+        refs = await fetchEmpRefs();                          // reload reference data after a successful sync
+      } catch (e) {
+        if (typeof toast === 'function') {
+          toast('Sincronizzazione dati di riferimento fallita: ' + (e && e.message ? e.message : 'errore') +
+                '. Filiale/Servizio/Codice potrebbero essere vuoti.', 'bad');
+        }
+      }
+    }
+  }
+  _empRefs = refs;
   return _empRefs;
 }
 
