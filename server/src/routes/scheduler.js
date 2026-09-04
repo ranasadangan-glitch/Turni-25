@@ -722,11 +722,29 @@ router.get('/month', async (req, res) => {
       pool.query(
         // updated_by holds the login username; resolve it to the human-readable
         // users.full_name so the per-cell tooltip never exposes raw logins.
+        //
+        // Branch filter MUST match the roster (drivers query above): an employee
+        // belongs to a branch via branch_id OR the multi-branch branch_ids array.
+        // The engine stamps each row's branch_code from the singular branch_id
+        // only, so filtering employee cells on se.branch_code hid the shifts of
+        // multi-branch employees (visible under their secondary branch in the
+        // roster but with an empty grid), and of any employee whose branch was
+        // set via branch_ids with branch_id NULL. So filter employee-linked rows
+        // by the employee's branch membership; legacy local_driver rows (no
+        // employee_id) still filter on their stamped branch_code.
         `SELECT se.employee_id, se.local_driver_id, se.day_of_month, se.shift_code,
                 se.updated_by, se.updated_at, u.full_name AS updated_by_name
            FROM schedule_entries se
            LEFT JOIN users u ON u.username = se.updated_by
-          WHERE se.schedule_month=$1 AND ($2='' OR se.branch_code=$2)`, [month, branch]),
+           LEFT JOIN employees e ON e.id = se.employee_id
+           LEFT JOIN branches b ON b.id = e.branch_id
+          WHERE se.schedule_month=$1
+            AND ( $2 = ''
+                  OR ( se.employee_id IS NOT NULL
+                       AND ( b.code = $2
+                             OR EXISTS (SELECT 1 FROM branches b2
+                                         WHERE b2.code=$2 AND b2.id = ANY(COALESCE(e.branch_ids, ARRAY[]::int[]))) ) )
+                  OR ( se.employee_id IS NULL AND se.branch_code = $2 ) )`, [month, branch]),
       pool.query(
         `SELECT service_key, day_of_month, qty
            FROM schedule_forecasts WHERE schedule_month=$1 AND ($2='' OR branch_code=$2)`, [month, branch]),
