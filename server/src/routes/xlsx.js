@@ -5,6 +5,10 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { pool, withTx } = require('../db/pool');
 const { auth, requireAdmin, loadScope, audit } = require('../middleware/auth');
+const { requirePermission, roleAllowed } = require('../middleware/rbac');
+const { createEmployee, updateEmployee } = require('../services/employeeWrite');
+const { regenerateEmployee } = require('../services/autoschedule');
+const logger = require('../utils/logger');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 router.use(auth, loadScope);
@@ -34,19 +38,332 @@ function branchClause(scope, params, col) {
   params.push(scope.branches); return ` AND ${col} = ANY($${params.length})`;
 }
 
+// ============================================================
+// Employee Excel — shared template / export / import definitions.
+// One column contract used by the template, the export and the importer so a
+// file round-trips. Headers are the app's Italian terminology.
+// ============================================================
+
+// Supported employee statuses (mirror database/schema/01_schema.sql default +
+// the status the app writes). Not master data — a fixed, small enum.
+const EMP_STATUSES = ['active', 'inactive', 'pending'];
+
+// key = the Excel header (exact string in the file). Multi-value columns use a
+// primary + a ";"-separated extras column (see the multi-branch model in
+// database/schema/08_multiselect.sql).
+const EMP_COLS = [
+  { key: 'Codice dipendente', width: 18, note: 'Chiave per CREATE/UPDATE. Vuoto = nuovo dipendente.' },
+  { key: 'Cognome', width: 16, required: true },
+  { key: 'Nome', width: 16, required: true },
+  { key: 'Email', width: 22 },
+  { key: 'Telefono', width: 15 },
+  { key: 'Transporter ID', width: 16 },
+  { key: 'Device', width: 14 },
+  { key: 'Filiale', width: 12, dd: 'branches', requiredOnCreate: true, note: 'Filiale principale (codice).' },
+  { key: 'Filiali', width: 16, dd: 'branches', note: 'Filiali aggiuntive, separate da ";".' },
+  { key: 'Servizio', width: 14, dd: 'services', note: 'Servizio principale (codice).' },
+  { key: 'Servizi', width: 16, dd: 'services', note: 'Servizi aggiuntivi, separati da ";".' },
+  { key: 'Codice turno', width: 12, dd: 'shifts', note: 'Codice turno principale.' },
+  { key: 'Codici turno', width: 16, dd: 'shifts', note: 'Codici turno aggiuntivi, separati da ";".' },
+  { key: 'Contratto', width: 14, dd: 'contracts', note: 'Codice tipo contratto.' },
+  { key: 'Team', width: 16, note: 'Nome team (deve esistere).' },
+  { key: 'Giorni lavorativi', width: 16, note: 'Numeri 1-7 separati da virgola (1=Lun). Default 1,2,3,4,5.' },
+  { key: 'Data assunzione', width: 14, note: 'Formato AAAA-MM-GG.' },
+  { key: 'Data inizio contratto', width: 16, note: 'Formato AAAA-MM-GG.' },
+  { key: 'Data fine contratto', width: 16, note: 'Formato AAAA-MM-GG. Vuoto = indeterminato.' },
+  { key: 'Stato', width: 12, dd: 'status', note: 'active | inactive | pending. Default active.' },
+];
+
+// CSV/formula-injection guard: a leading = + - @ (or control char) can be
+// interpreted as a formula by spreadsheet apps. Prefix such string values with
+// an apostrophe so they are always treated as text. Non-strings pass through.
+function safeCell(v) {
+  if (typeof v !== 'string') return v;
+  return /^[=+\-@\t\r]/.test(v) ? "'" + v : v;
+}
+
+// Only accept real .xlsx uploads (extension + magic bytes: xlsx is a ZIP → "PK").
+function assertXlsx(file) {
+  if (!file) return 'File mancante';
+  if (!/\.xlsx$/i.test(file.originalname || '')) return 'Sono ammessi solo file .xlsx';
+  const b = file.buffer;
+  if (!b || b.length < 4 || b[0] !== 0x50 || b[1] !== 0x4b) return 'File .xlsx non valido';
+  return null;
+}
+
+const asStr = (v) => (v == null ? '' : String(v).trim());
+const splitMulti = (v) => asStr(v).split(';').map((s) => s.trim()).filter(Boolean);
+
+// Load every master-data lookup the importer/validator needs, once per request.
+async function loadEmpMaster() {
+  const [branches, services, shifts, contracts, teams, employees] = await Promise.all([
+    pool.query('SELECT id, code FROM branches'),
+    pool.query('SELECT id, code FROM service_types'),
+    pool.query('SELECT code FROM shift_codes'),
+    pool.query('SELECT id, code FROM contract_types'),
+    pool.query('SELECT id, name FROM teams'),
+    pool.query('SELECT id, employee_code FROM employees'),
+  ]);
+  const map = (rows, k) => { const m = new Map(); rows.forEach((r) => m.set(String(r[k]).toLowerCase(), r)); return m; };
+  return {
+    branch: map(branches.rows, 'code'),
+    service: map(services.rows, 'code'),
+    shift: new Set(shifts.rows.map((r) => String(r.code).toLowerCase())),
+    contract: map(contracts.rows, 'code'),
+    team: map(teams.rows, 'name'),
+    empByCode: map(employees.rows.filter((e) => e.employee_code), 'employee_code'),
+    shiftCanon: new Map(shifts.rows.map((r) => [String(r.code).toLowerCase(), r.code])),
+  };
+}
+
+function parseWorkDays(v) {
+  const s = asStr(v);
+  if (!s) return { ok: true, val: undefined };            // preserve/default
+  const nums = s.split(/[,\s]+/).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 7);
+  if (!nums.length) return { ok: false };
+  return { ok: true, val: [...new Set(nums)].sort() };
+}
+function parseDate(v) {
+  if (v == null || v === '') return { ok: true, val: undefined };
+  const d = isoDate(v);
+  return d ? { ok: true, val: d } : { ok: false };
+}
+
+// Validate + build the canonical write body for a single sheet row. Returns
+// { rowNum, employee_code, action, errors[], body, targetId }. Pure (no writes).
+function validateRow(r, rowNum, master, seenCodes) {
+  const errors = [];
+  const get = (k) => asStr(r[k]);
+  const code = get('Codice dipendente');
+  const existing = code ? master.empByCode.get(code.toLowerCase()) : null;
+  const action = existing ? 'UPDATE' : 'CREATE';
+  const body = {};
+
+  // Duplicate employee_code within the file.
+  if (code) {
+    const lc = code.toLowerCase();
+    if (seenCodes.has(lc)) errors.push(`Codice dipendente "${code}" duplicato nel file`);
+    else seenCodes.add(lc);
+    body.employee_code = code;
+  }
+
+  // Required identity.
+  const last = get('Cognome'); const first = get('Nome');
+  if (!last) errors.push('Cognome obbligatorio');
+  if (!first) errors.push('Nome obbligatorio');
+  if (last) body.last_name = last;
+  if (first) body.first_name = first;
+
+  // Plain optional text fields — only set when supplied (partial UPDATE).
+  for (const [col, field] of [['Email', 'email'], ['Telefono', 'phone'],
+    ['Transporter ID', 'transporter_id'], ['Device', 'device']]) {
+    const v = get(col); if (v) body[field] = v;
+  }
+  if (get('Email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(get('Email'))) errors.push('Email non valida');
+
+  // Branches (primary + extras → branch_ids; helper derives branch_id).
+  const bPrimary = get('Filiale');
+  const bExtra = splitMulti(r['Filiali']);
+  if (bPrimary || bExtra.length) {
+    const codes = [bPrimary, ...bExtra].filter(Boolean);
+    const ids = [];
+    for (const c of codes) {
+      const hit = master.branch.get(c.toLowerCase());
+      if (!hit) errors.push(`Filiale ${c} non esistente`);
+      else if (!ids.includes(hit.id)) ids.push(hit.id);
+    }
+    if (ids.length) body.branch_ids = ids;
+  } else if (action === 'CREATE') {
+    errors.push('Filiale obbligatoria per un nuovo dipendente');
+  }
+
+  // Services (primary + extras → service_type_ids).
+  const sPrimary = get('Servizio');
+  const sExtra = splitMulti(r['Servizi']);
+  if (sPrimary || sExtra.length) {
+    const codes = [sPrimary, ...sExtra].filter(Boolean);
+    const ids = [];
+    for (const c of codes) {
+      const hit = master.service.get(c.toLowerCase());
+      if (!hit) errors.push(`Servizio ${c} non esistente`);
+      else if (!ids.includes(hit.id)) ids.push(hit.id);
+    }
+    if (ids.length) body.service_type_ids = ids;
+  }
+
+  // Shift codes (primary + extras → default_shift_codes; TEXT codes).
+  const shPrimary = get('Codice turno');
+  const shExtra = splitMulti(r['Codici turno']);
+  if (shPrimary || shExtra.length) {
+    const codes = [shPrimary, ...shExtra].filter(Boolean);
+    const out = [];
+    for (const c of codes) {
+      const canon = master.shiftCanon.get(c.toLowerCase());
+      if (!canon) errors.push(`Codice turno ${c} non esistente`);
+      else if (!out.includes(canon)) out.push(canon);
+    }
+    if (out.length) body.default_shift_codes = out;
+  }
+
+  // Contract type (code → id).
+  const ct = get('Contratto');
+  if (ct) {
+    const hit = master.contract.get(ct.toLowerCase());
+    if (!hit) errors.push(`Contratto ${ct} non esistente`);
+    else body.contract_type_id = hit.id;
+  }
+
+  // Team (name → id).
+  const tm = get('Team');
+  if (tm) {
+    const hit = master.team.get(tm.toLowerCase());
+    if (!hit) errors.push(`Team ${tm} non esistente`);
+    else body.team_id = hit.id;
+  }
+
+  // Working days.
+  const wd = parseWorkDays(r['Giorni lavorativi']);
+  if (!wd.ok) errors.push('Giorni lavorativi non validi (usa numeri 1-7)');
+  else if (wd.val !== undefined) body.work_days = wd.val;
+
+  // Dates.
+  for (const [col, field] of [['Data assunzione', 'hire_date'],
+    ['Data inizio contratto', 'contract_start_date'], ['Data fine contratto', 'contract_end_date']]) {
+    const d = parseDate(r[col]);
+    if (!d.ok) errors.push(`${col} non valida (usa AAAA-MM-GG)`);
+    else if (d.val !== undefined) body[field] = d.val;
+  }
+
+  // Status.
+  const st = get('Stato');
+  if (st) {
+    if (!EMP_STATUSES.includes(st.toLowerCase())) errors.push(`Stato ${st} non valido`);
+    else body.status = st.toLowerCase();
+  }
+
+  return { rowNum, employee_code: code || null, action, errors, body, targetId: existing ? existing.id : null };
+}
+
+// Validate a whole workbook. Returns { results[], summary, ok }.
+async function validateEmployeesFile(file) {
+  const rows = await readRows(file);
+  const master = await loadEmpMaster();
+  const seen = new Set();
+  const results = rows.map((r, i) => validateRow(r, i + 2, master, seen)); // +2: header is row 1
+  const summary = {
+    total: results.length,
+    create: results.filter((x) => x.action === 'CREATE' && !x.errors.length).length,
+    update: results.filter((x) => x.action === 'UPDATE' && !x.errors.length).length,
+    errors: results.filter((x) => x.errors.length).length,
+  };
+  return { results, summary, ok: summary.errors === 0 && summary.total > 0 };
+}
+
+function colLetter(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; } return s; }
+
+// Build the .xlsx employee template with live master-data dropdowns. Nothing is
+// hardcoded: branches/services/shift codes/contracts come from the database.
+async function buildEmployeeTemplate() {
+  const [branches, services, shifts, contracts] = await Promise.all([
+    pool.query('SELECT code, name FROM branches WHERE active ORDER BY code'),
+    pool.query('SELECT code, name FROM service_types WHERE active ORDER BY sort_order, code'),
+    pool.query('SELECT code, label FROM shift_codes ORDER BY category, code'),
+    pool.query('SELECT code, label FROM contract_types ORDER BY code'),
+  ]);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Dipendenti');
+  ws.columns = EMP_COLS.map((c) => ({ header: c.key, key: c.key, width: c.width || 14 }));
+
+  // Header styling + required marker.
+  ws.getRow(1).font = { bold: true };
+  EMP_COLS.forEach((c, i) => {
+    const cell = ws.getRow(1).getCell(i + 1);
+    if (c.required || c.requiredOnCreate) cell.note = 'Obbligatorio' + (c.requiredOnCreate ? ' per nuovi dipendenti' : '');
+  });
+
+  // Hidden sheet holding the dropdown value lists.
+  const meta = wb.addWorksheet('_meta');
+  meta.state = 'veryHidden';
+  const lists = {
+    branches: branches.rows.map((r) => r.code),
+    services: services.rows.map((r) => r.code),
+    shifts: shifts.rows.map((r) => r.code),
+    contracts: contracts.rows.map((r) => r.code),
+    status: EMP_STATUSES,
+  };
+  const listCol = {};
+  let ci = 0;
+  for (const [name, vals] of Object.entries(lists)) {
+    ci++;
+    const L = colLetter(ci);
+    meta.getCell(`${L}1`).value = name;
+    vals.forEach((v, i) => { meta.getCell(`${L}${i + 2}`).value = v; });
+    listCol[name] = { L, n: vals.length };
+  }
+
+  // Apply list data-validation to each dropdown column, rows 2..MAXROW.
+  const MAXROW = 500;
+  EMP_COLS.forEach((c, idx) => {
+    if (!c.dd || !listCol[c.dd] || !listCol[c.dd].n) return;
+    const { L, n } = listCol[c.dd];
+    const letter = colLetter(idx + 1);
+    for (let r = 2; r <= MAXROW; r++) {
+      ws.getCell(`${letter}${r}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: [`=_meta!$${L}$2:$${L}$${n + 1}`],
+      };
+    }
+  });
+
+  // One dynamic example row (uses the FIRST available master value — never a
+  // hardcoded branch/service/shift).
+  const ex = {
+    'Codice dipendente': 'EMP001', Cognome: 'Rossi', Nome: 'Mario',
+    Email: 'mario.rossi@example.com', Telefono: '3331234567',
+    Filiale: branches.rows[0] ? branches.rows[0].code : '',
+    Servizio: services.rows[0] ? services.rows[0].code : '',
+    'Codice turno': shifts.rows[0] ? shifts.rows[0].code : '',
+    Contratto: contracts.rows[0] ? contracts.rows[0].code : '',
+    'Giorni lavorativi': '1,2,3,4,5', 'Data assunzione': '2024-03-01', Stato: 'active',
+  };
+  ws.addRow(ex);
+
+  // Instructions sheet.
+  const isn = wb.addWorksheet('Istruzioni');
+  isn.columns = [{ width: 26 }, { width: 70 }];
+  const line = (a, b) => isn.addRow([a, b]);
+  isn.addRow(['ISTRUZIONI IMPORT DIPENDENTI']).font = { bold: true, size: 14 };
+  isn.addRow([]);
+  line('Chiave', 'La colonna "Codice dipendente" decide CREATE o UPDATE:');
+  line('', '• vuoto o codice nuovo → crea un nuovo dipendente');
+  line('', '• codice già esistente → aggiorna il dipendente');
+  line('', 'Nell\'UPDATE le celle vuote mantengono il valore attuale.');
+  isn.addRow([]);
+  line('Obbligatori', 'Cognome, Nome. Per i nuovi dipendenti anche Filiale.');
+  line('Filiali multiple', 'Filiale = principale; Filiali = aggiuntive separate da ";".');
+  line('Servizi/Codici', 'Stessa logica: Servizio/Codice turno = principale; plurale = extra ";".');
+  line('Giorni lavorativi', 'Numeri 1-7 separati da virgola (1=Lun … 7=Dom).');
+  line('Date', 'Formato AAAA-MM-GG.');
+  line('Stato', EMP_STATUSES.join(' | ') + ' (default active).');
+  isn.addRow([]);
+  line('Valori ammessi', 'Filiale/Servizio/Codice turno/Contratto/Stato hanno menu a tendina');
+  line('', 'popolati con i dati reali dell\'applicazione. Non inventare valori.');
+  isn.getColumn(1).font = { bold: true };
+
+  return wb;
+}
+
 // ---------------- TEMPLATES ----------------
 // GET /api/xlsx/template/:type  (employees|forecast|schedule)
 router.get('/template/:type', async (req, res) => {
   const t = req.params.type;
   if (t === 'employees') {
-    const wb = sheetToWb([{
-      employee_code: 'EMP001', transporter_id: 'A1B2C3D4E5', first_name: 'Mario', last_name: 'Rossi',
-      email: 'mario@example.com', phone: '3331234567', device: 'Samsung A14',
-      branch_code: 'DLO1', team_name: 'Team Milano A', service_code: 'NEXT', contract_code: '21',
-      work_days: '1,2,3,4,5', hire_date: '2024-03-01',
-      contract_start_date: '2024-03-01', contract_end_date: '', status: 'active',
-    }], 'Employees');
-    return await sendWorkbook(res, wb, 'template_employees.xlsx');
+    // Employee template mirrors employee data → gate on employee.view.
+    if (req.user.role !== 'admin' && !roleAllowed('employee.view', req.user.role)) {
+      return res.status(403).json({ error: 'Permesso negato: employee.view' });
+    }
+    const wb = await buildEmployeeTemplate();
+    return await sendWorkbook(res, wb, 'template_dipendenti.xlsx');
   }
   if (t === 'forecast') {
     const wb = sheetToWb([
@@ -113,43 +430,66 @@ function isoDate(v) {
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
 }
 
-// POST /api/xlsx/import/employees
-router.post('/import/employees', requireAdmin, upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File mancante' });
-  const rows = await readRows(req.file);
-  // resolve lookups once
-  const branches = (await pool.query('SELECT id,code FROM branches')).rows;
-  const teams = (await pool.query('SELECT id,name FROM teams')).rows;
-  const services = (await pool.query('SELECT id,code FROM service_types')).rows;
-  const contracts = (await pool.query('SELECT id,code FROM contract_types')).rows;
-  const find = (arr, key, val) => arr.find(x => String(x[key]).toLowerCase() === String(val || '').toLowerCase());
-  let added = 0, skipped = 0;
+// A compact per-row report for the frontend preview table.
+function toReport(results) {
+  return results.map((r) => ({
+    row: r.rowNum, code: r.employee_code, action: r.action,
+    status: r.errors.length ? 'ERRORE' : 'OK', errors: r.errors,
+  }));
+}
+
+// POST /api/xlsx/import/employees/preview  — validate only, ZERO writes.
+router.post('/import/employees/preview', requirePermission('employee.manage'), upload.single('file'), async (req, res) => {
+  const bad = assertXlsx(req.file);
+  if (bad) return res.status(400).json({ error: bad });
+  let v;
+  try { v = await validateEmployeesFile(req.file); }
+  catch (e) { logger.error('xlsx', 'employee preview parse', e); return res.status(400).json({ error: 'File .xlsx non leggibile' }); }
+  res.json({ ok: v.ok, summary: v.summary, rows: toReport(v.results) });
+});
+
+// POST /api/xlsx/import/employees  — ALL-OR-NOTHING import.
+// Re-validates server-side (never trusts the preview), writes through the SAME
+// canonical employee write path, then regenerates schedules per employee AFTER
+// commit (same best-effort behavior as the normal form).
+router.post('/import/employees', requirePermission('employee.manage'), upload.single('file'), async (req, res) => {
+  const bad = assertXlsx(req.file);
+  if (bad) return res.status(400).json({ error: bad });
+
+  let v;
+  try { v = await validateEmployeesFile(req.file); }
+  catch (e) { logger.error('xlsx', 'employee import parse', e); return res.status(400).json({ error: 'File .xlsx non leggibile' }); }
+
+  if (v.summary.total === 0) return res.status(400).json({ error: 'Nessuna riga da importare' });
+  // All-or-nothing: any validation error → write NOTHING.
+  if (v.summary.errors > 0) {
+    return res.status(422).json({ ok: false, error: `Import non eseguito: ${v.summary.errors} righe con errori`, summary: v.summary, rows: toReport(v.results) });
+  }
+
+  const actor = req.user.username;
+  const affected = [];
   await withTx(async (c) => {
-    for (const r of rows) {
-      if (!r.first_name && !r.last_name) { skipped++; continue; }
-      const br = find(branches, 'code', r.branch_code);
-      const tm = find(teams, 'name', r.team_name);
-      const sv = find(services, 'code', r.service_code);
-      const ct = find(contracts, 'code', r.contract_code);
-      // Working days drive the schedule (not hours). Accept them from the file.
-      const wd = r.work_days ? String(r.work_days).split(/[, ]+/).map(Number).filter(n => n >= 1 && n <= 7) : [1, 2, 3, 4, 5];
-      await c.query(
-        `INSERT INTO employees (employee_code,transporter_id,first_name,last_name,email,phone,device,
-           branch_id,team_id,service_type_id,contract_type_id,work_days,
-           hire_date,contract_start_date,contract_end_date,status,added_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,COALESCE($16,'active'),$17)`,
-        [r.employee_code || null, r.transporter_id || null, r.first_name || '', r.last_name || '',
-         r.email || null, r.phone || null, r.device || null,
-         br ? br.id : null, tm ? tm.id : null, sv ? sv.id : null, ct ? ct.id : null,
-         wd,
-         isoDate(r.hire_date), isoDate(r.contract_start_date), isoDate(r.contract_end_date),
-         r.status || null, req.user.username]
-      );
-      added++;
+    for (const r of v.results) {
+      if (r.action === 'UPDATE') {
+        const row = await updateEmployee(r.targetId, r.body, actor, c);
+        if (row) affected.push(row.id);
+      } else {
+        const row = await createEmployee(r.body, actor, c);
+        if (row) affected.push(row.id);
+      }
     }
   });
-  await audit(req, 'employee', null, 'create', `Import XLSX: ${added} dipendenti (${skipped} saltati)`);
-  res.json({ added, skipped });
+
+  // Post-commit scheduler regeneration (per employee, best-effort — mirrors the
+  // form: a regen failure never rolls back the committed employee rows).
+  for (const id of affected) {
+    try { await regenerateEmployee(id, actor); }
+    catch (e) { logger.error('xlsx', 'autoregen employee ' + id, e); }
+  }
+
+  await audit(req, 'employee', null, 'create',
+    `Import XLSX: ${v.summary.create} creati, ${v.summary.update} aggiornati`);
+  res.json({ ok: true, created: v.summary.create, updated: v.summary.update, summary: v.summary });
 });
 
 // POST /api/xlsx/import/forecast
@@ -213,20 +553,68 @@ router.post('/import/schedule', requireAdmin, upload.single('file'), async (req,
 });
 
 // ---------------- EXPORTS (scoped) ----------------
-// GET /api/xlsx/export/employees
-router.get('/export/employees', async (req, res) => {
+// GET /api/xlsx/export/employees — readable values, multi-branch format, and
+// formula-injection-safe cells. Uses the SAME column headers as the template so
+// an export round-trips through import.
+router.get('/export/employees', requirePermission('employee.view'), async (req, res) => {
   const params = []; const bc = branchClause(req.scope, params, 'e.branch_id');
-  const { rows } = await pool.query(
-    `SELECT e.employee_code,e.transporter_id,e.first_name,e.last_name,e.email,e.phone,e.device,
-            b.code branch_code,t.name team_name,st.code service_code,ct.code contract_code,
-            array_to_string(e.work_days,',') work_days,
-            e.hire_date,e.contract_start_date,e.contract_end_date,e.status
-       FROM employees e
-       LEFT JOIN branches b ON b.id=e.branch_id LEFT JOIN teams t ON t.id=e.team_id
-       LEFT JOIN service_types st ON st.id=e.service_type_id LEFT JOIN contract_types ct ON ct.id=e.contract_type_id
-      WHERE 1=1 ${bc} ORDER BY e.last_name,e.first_name`, params);
-  await audit(req, 'employee', null, 'export', `Export XLSX dipendenti (${rows.length})`);
-  await sendWorkbook(res, sheetToWb(rows, 'Employees'), 'employees.xlsx');
+  const [emps, branches, services] = await Promise.all([
+    pool.query(
+      `SELECT e.employee_code, e.last_name, e.first_name, e.email, e.phone, e.transporter_id, e.device,
+              e.branch_id, e.branch_ids, e.service_type_id, e.service_type_ids,
+              e.default_shift_code, e.default_shift_codes,
+              ct.code AS contract_code, t.name AS team_name,
+              e.work_days, e.hire_date, e.contract_start_date, e.contract_end_date, e.status
+         FROM employees e
+         LEFT JOIN teams t ON t.id = e.team_id
+         LEFT JOIN contract_types ct ON ct.id = e.contract_type_id
+        WHERE 1=1 ${bc} ORDER BY e.last_name, e.first_name`, params),
+    pool.query('SELECT id, code FROM branches'),
+    pool.query('SELECT id, code FROM service_types'),
+  ]);
+  const bCode = new Map(branches.rows.map((r) => [r.id, r.code]));
+  const sCode = new Map(services.rows.map((r) => [r.id, r.code]));
+
+  // primary = the singular column; extras = the array minus the primary, so a
+  // re-import (Filiale + Filiali) reproduces the same set.
+  const primaryAndExtra = (primaryId, ids, codeMap) => {
+    const arr = Array.isArray(ids) ? ids : (primaryId != null ? [primaryId] : []);
+    const codes = arr.map((id) => codeMap.get(id)).filter(Boolean);
+    const primary = primaryId != null ? codeMap.get(primaryId) : codes[0];
+    const extra = codes.filter((c) => c !== primary);
+    return { primary: primary || '', extra: extra.join(';') };
+  };
+  const shiftPrimaryExtra = (primary, arr) => {
+    const all = Array.isArray(arr) && arr.length ? arr : (primary ? [primary] : []);
+    const p = primary || all[0] || '';
+    return { primary: p, extra: all.filter((c) => c !== p).join(';') };
+  };
+  const d = (v) => (v ? String(v).slice(0, 10) : '');
+
+  const out = emps.rows.map((e) => {
+    const b = primaryAndExtra(e.branch_id, e.branch_ids, bCode);
+    const s = primaryAndExtra(e.service_type_id, e.service_type_ids, sCode);
+    const sh = shiftPrimaryExtra(e.default_shift_code, e.default_shift_codes);
+    const row = {
+      'Codice dipendente': e.employee_code || '', Cognome: e.last_name || '', Nome: e.first_name || '',
+      Email: e.email || '', Telefono: e.phone || '', 'Transporter ID': e.transporter_id || '', Device: e.device || '',
+      Filiale: b.primary, Filiali: b.extra, Servizio: s.primary, Servizi: s.extra,
+      'Codice turno': sh.primary, 'Codici turno': sh.extra,
+      Contratto: e.contract_code || '', Team: e.team_name || '',
+      'Giorni lavorativi': Array.isArray(e.work_days) ? e.work_days.join(',') : '',
+      'Data assunzione': d(e.hire_date), 'Data inizio contratto': d(e.contract_start_date),
+      'Data fine contratto': d(e.contract_end_date), Stato: e.status || '',
+    };
+    // Injection guard on every cell value.
+    Object.keys(row).forEach((k) => { row[k] = safeCell(row[k]); });
+    return row;
+  });
+
+  // Guarantee full column order even when the roster is empty.
+  const header = {}; EMP_COLS.forEach((c) => { header[c.key] = ''; });
+  const rowsForSheet = out.length ? out : [header];
+  await audit(req, 'employee', null, 'export', `Export XLSX dipendenti (${emps.rows.length})`);
+  await sendWorkbook(res, sheetToWb(rowsForSheet, 'Dipendenti'), 'dipendenti.xlsx');
 });
 
 // GET /api/xlsx/export/forecast?from=&to=
