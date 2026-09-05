@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const { auth, loadScope, audit } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
 const { ensureMonth } = require('../services/autoschedule');
+const { pruneServiceCounts } = require('../services/serviceCodes');
 
 router.use(auth, loadScope);
 
@@ -489,12 +490,21 @@ router.put('/config', requirePermission('config.manage'), async (req, res) => {
   try {
     const { branch_code = 'DLO1', key, value } = req.body || {};
     if (!key || value === undefined) return res.status(400).json({ error: 'key e value richiesti' });
+    // Invariant: when saving the services list on its own, prune each count[] to
+    // the branch's current master codes (services[].count ⊆ codes[].code).
+    let toStore = value;
+    if (key === 'services' && Array.isArray(value)) {
+      const { rows } = await pool.query(
+        "SELECT config_value FROM scheduler_config WHERE branch_code=$1 AND config_key='codes'", [branch_code]);
+      const codes = Array.isArray(rows[0] && rows[0].config_value) ? rows[0].config_value : [];
+      toStore = pruneServiceCounts(value, codes).services;
+    }
     await pool.query(
       `INSERT INTO scheduler_config (branch_code, config_key, config_value, updated_by)
        VALUES ($1,$2,$3,$4)
        ON CONFLICT (branch_code, config_key)
        DO UPDATE SET config_value=EXCLUDED.config_value, updated_by=EXCLUDED.updated_by, updated_at=now()`,
-      [branch_code, key, JSON.stringify(value), req.user.username]
+      [branch_code, key, JSON.stringify(toStore), req.user.username]
     );
     await audit(req, 'config', null, 'update', `Scheduler config ${branch_code}.${key} aggiornato`);
     res.json({ ok: true });
@@ -507,6 +517,12 @@ router.post('/config/import', requirePermission('config.manage'), async (req, re
   try {
     const { branch_code = 'DLO1', config } = req.body || {};
     if (!config) return res.status(400).json({ error: 'config richiesta' });
+    // Invariant: services[].count ⊆ codes[].code. Safely prune stale references
+    // before persisting (never reject the whole config for stale codes). Only
+    // acts when both keys are present in this import.
+    if (Array.isArray(config.services) && Array.isArray(config.codes)) {
+      config.services = pruneServiceCounts(config.services, config.codes).services;
+    }
     const keys = Object.keys(config);
     await withTx(async (c) => {
       for (const key of keys) {

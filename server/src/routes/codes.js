@@ -12,6 +12,7 @@ const router = require('express').Router();
 const { pool, withTx } = require('../db/pool');
 const { auth, audit } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
+const { reconcileBranchServiceCounts } = require('../services/serviceCodes');
 const logger = require('../utils/logger');
 
 router.use(auth);
@@ -127,8 +128,17 @@ router.delete('/:code', requirePermission('config.manage'), async (req, res) => 
       return found ? next : null;
     });
     if (!found || !changed) return res.status(404).json({ error: 'Codice non trovato' });
-    await audit(req, 'config', null, 'delete', `Codice eliminato: ${target}`);
-    res.json({ ok: true });
+    // Cascade: a deleted master code must not linger in any service's counted set
+    // (invariant: services[].count ⊆ codes[].code). Prune this branch's services.
+    let pruned = { changed: false, report: [] };
+    try {
+      pruned = await reconcileBranchServiceCounts(pool, branch, req.user.username);
+    } catch (e) {
+      logger.error('codes', 'service-count cascade after delete failed', e);
+    }
+    await audit(req, 'config', null, 'delete',
+      `Codice eliminato: ${target}` + (pruned.changed ? ` (rimosso da ${pruned.report.length} servizi)` : ''));
+    res.json({ ok: true, servicesPruned: pruned.report });
   } catch (e) { logger.error('codes', 'delete failed', e); res.status(500).json({ error: 'Errore interno' }); }
 });
 

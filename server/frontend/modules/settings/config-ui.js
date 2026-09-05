@@ -438,6 +438,12 @@
     const c = CFG().codes[i];
     if (!confirm('Eliminare il codice ' + c.code + '?')) return;
     CFG().codes.splice(i, 1);
+    // Cascade: keep the invariant services[].count ⊆ codes[].code — remove the
+    // deleted code from every service's counted set. Other codes/services stay.
+    const gone = String(c.code).toLowerCase();
+    (services() || []).forEach(function (s) {
+      if (Array.isArray(s.count)) s.count = s.count.filter(function (x) { return String(x).toLowerCase() !== gone; });
+    });
     if (cfgEdit.codes === i) cfgEdit.codes = null;
     cfgPersist('Codice eliminato');
     renderCfgTab(cfgTab);
@@ -553,9 +559,14 @@
     ];
     var searchOf = function (s) { return [s.key, s.label, (s.count || []).join(' ')].join(' '); };
     var name = function (s) { return "<span class='mgr-svc'><span class='mgr-ico'>" + esc(_svcMeta(s).icon) + "</span><span><b>" + esc(s.label) + "</b><br><small>" + esc(s.key) + "</small></span></span>"; };
+    // Display safeguard: only show counted codes that still exist in the master
+    // (scheduler_config.codes). This hides stale references even before the
+    // backend/data reconciliation has run; it does NOT replace that invariant.
+    var _masterSet = {}; (CFG().codes || []).forEach(function (c) { if (c && c.code != null) _masterSet[String(c.code).toLowerCase()] = true; });
+    var validCount = function (s) { return (s.count || []).filter(function (code) { return _masterSet[String(code).toLowerCase()]; }); };
     var columns = [
       { label: 'Servizio', val: name, sortVal: function (s) { return (s.label || '').toLowerCase(); } },
-      { label: 'Codici', val: function (s) { return "<span class='mgr-codes'>" + (s.count || []).map(esc).join(', ') + "</span>"; } },
+      { label: 'Codici conteggiati', val: function (s) { return "<span class='mgr-codes'>" + validCount(s).map(esc).join(', ') + "</span>"; } },
       { label: 'Filiali', val: function (s) { return (s.filiali && s.filiali.length) ? s.filiali.map(esc).join(', ') : "<i class='text-muted'>tutte</i>"; } },
       { label: 'Ore', val: function (s) { var h = _svcMeta(s).defaultHours; return h !== '' ? esc(h) + 'h' : '—'; }, sortVal: function (s) { return +_svcMeta(s).defaultHours || 0; } },
       { label: 'Mezzo', val: function (s) { return esc(_svcMeta(s).vehicleType || '—'); }, sortVal: function (s) { return _svcMeta(s).vehicleType; } },
@@ -571,7 +582,7 @@
       return "<div class='mgr-card-h'>" + name(s) + _statusChip(m.status) + "</div>" +
         "<div class='mgr-card-meta'><span>🏢 " + ((s.filiali && s.filiali.length) ? esc(s.filiali.join(', ')) : 'tutte') + "</span>" + (m.vehicleType ? "<span>🚐 " + esc(m.vehicleType) + "</span>" : '') + (m.defaultHours !== '' ? "<span>⏱ " + esc(m.defaultHours) + "h</span>" : '') + "</div>" +
         (m.training ? "<div class='mgr-card-note'>🎓 " + esc(m.training) + "</div>" : '') +
-        "<div class='mgr-card-note mgr-codes'>" + (s.count || []).map(esc).join(', ') + "</div>";
+        "<div class='mgr-card-note mgr-codes'>" + validCount(s).map(esc).join(', ') + "</div>";
     };
     var list = _applyList('services', list0, searchOf, filters);
     body.innerHTML = _svcForm() + _toolbar('services', stats, filters, 'Servizio', 'cfgEditService', [-1]) +
