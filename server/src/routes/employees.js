@@ -98,6 +98,14 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/employees  (admin)
 router.post('/', requirePermission('employee.manage'), async (req, res) => {
+  // Business rule: a new employee has EXACTLY ONE Filiale, ONE Servizio and ONE
+  // Codice turno — all three required. Accept either the singular field or a
+  // (single) legacy array; reject when the assignment is missing entirely.
+  const b = req.body || {};
+  const present = (one, arr) => (b[one] != null && b[one] !== '') || (Array.isArray(b[arr]) && b[arr].some((v) => v != null && v !== ''));
+  if (!present('branch_id', 'branch_ids')) return res.status(400).json({ error: 'Filiale obbligatoria' });
+  if (!present('service_type_id', 'service_type_ids')) return res.status(400).json({ error: 'Servizio obbligatorio' });
+  if (!present('default_shift_code', 'default_shift_codes')) return res.status(400).json({ error: 'Codice turno obbligatorio' });
   const row = await createEmployee(req.body || {}, req.user.username);   // canonical write path
   await audit(req, 'employee', row.id, 'create', `${row.first_name} ${row.last_name}`);
   await autoRegen(row.id, req.user.username);   // new employee → working days materialize
