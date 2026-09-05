@@ -544,6 +544,11 @@ async function saveEmployee(andNew) {
     msg.textContent = 'Nome e cognome sono obbligatori';
     return;
   }
+  // Business rule: exactly one Filiale, one Servizio and one Codice turno — all
+  // three required.
+  if (!payload.branch_ids.length)          { msg.textContent = 'La Filiale è obbligatoria'; return; }
+  if (!payload.service_type_ids.length)    { msg.textContent = 'Il Servizio è obbligatorio'; return; }
+  if (!payload.default_shift_codes.length) { msg.textContent = 'Il Codice turno è obbligatorio'; return; }
 
   const editId = document.getElementById('empEdit').dataset.editId;
   try {

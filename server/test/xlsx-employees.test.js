@@ -97,7 +97,7 @@ async function parseXlsx(buffer, sheet = 'Dipendenti') {
 }
 
 const H = ['Codice dipendente', 'Cognome', 'Nome', 'Email', 'Telefono', 'Transporter ID', 'Device',
-  'Filiale', 'Filiali', 'Servizio', 'Servizi', 'Codice turno', 'Codici turno', 'Contratto', 'Team',
+  'Filiale', 'Servizio', 'Codice turno', 'Contratto', 'Team',
   'Giorni lavorativi', 'Data assunzione', 'Data inizio contratto', 'Data fine contratto', 'Stato'];
 
 const preview = async (buffer) => runHandler(businessHandler('post', '/import/employees/preview'), mkReq({ file: asFile(buffer) }));
@@ -129,8 +129,11 @@ test('A/B/C/D/E: template downloads, has expected columns and LIVE branch/servic
   assert.ok(r.buffer && r.buffer.length > 0, 'A: template downloaded');
   const { wb, headers } = await parseXlsx(r.buffer);
   // B: expected columns present
-  ['Codice dipendente', 'Cognome', 'Nome', 'Filiale', 'Filiali', 'Servizio', 'Codice turno', 'Stato'].forEach((h) =>
+  ['Codice dipendente', 'Cognome', 'Nome', 'Filiale', 'Servizio', 'Codice turno', 'Stato'].forEach((h) =>
     assert.ok(headers.includes(h), 'B: header ' + h));
+  // Business rule: no plural / multi-value columns in the template.
+  ['Filiali', 'Servizi', 'Codici turno'].forEach((h) =>
+    assert.ok(!headers.includes(h), 'B: plural column absent → ' + h));
   // C/D/E: live values on the hidden _meta sheet include DLO1 and DLO7
   const meta = wb.getWorksheet('_meta');
   assert.ok(meta, 'hidden _meta sheet exists');
@@ -154,12 +157,12 @@ test('B2: template applies list data-validation to the Filiale column', async (t
 });
 
 // ---------- F, P, Q, R, T: CREATE ----------
-test('F/P/Q/R/T: CREATE writes employee, branch_id+branch_ids, autoRegen, audit', async (t) => {
+test('F/P/Q/R/T: CREATE writes employee, single branch_id + 1-element branch_ids, autoRegen, audit', async (t) => {
   if (!dbOk) return t.skip('no database');
   const code = PFX + 'CREATE1';
   const buf = await buildXlsx(H, [{
     'Codice dipendente': code, Cognome: 'Rossi', Nome: 'Mario',
-    Filiale: 'DLO1', Filiali: 'DLO7', Servizio: 'DLO1_NEXT', 'Codice turno': 'X',
+    Filiale: 'DLO1', Servizio: 'DLO1_NEXT', 'Codice turno': 'X',
     'Giorni lavorativi': '1,2,3,4,5', Stato: 'active',
   }]);
   const r = await doImport(buf);
@@ -167,10 +170,14 @@ test('F/P/Q/R/T: CREATE writes employee, branch_id+branch_ids, autoRegen, audit'
   assert.equal(r.body.created, 1);
   const e = await empByCode(code);
   assert.ok(e, 'F: employee created');
-  // P/Q: branch linkage
-  const d1 = await branchId('DLO1'); const d7 = await branchId('DLO7');
-  assert.equal(e.branch_id, d1, 'P: primary branch_id = DLO1 (first)');
-  assert.deepEqual(e.branch_ids, [d1, d7], 'Q: branch_ids = [DLO1, DLO7]');
+  // P: exactly one branch via the singular column. Q: the legacy multi-value
+  // columns are NOT populated (no branch_ids / arrays created).
+  const d1 = await branchId('DLO1');
+  assert.equal(e.branch_id, d1, 'P: branch_id = DLO1');
+  assert.equal(e.branch_ids, null, 'Q: branch_ids NOT populated (null)');
+  assert.equal(e.service_type_ids, null, 'Q: service_type_ids NOT populated (null)');
+  assert.equal(e.default_shift_codes, null, 'Q: default_shift_codes NOT populated (null)');
+  assert.ok(e.service_type_id != null && e.default_shift_code === 'X', 'single service + shift set');
   // R: autoRegen produced schedule entries
   const cells = await pool.query("SELECT count(*)::int n FROM schedule_entries WHERE employee_id=$1 AND updated_by='auto-engine'", [e.id]);
   assert.ok(cells.rows[0].n > 0, 'R: auto-generated shifts exist');
@@ -185,7 +192,7 @@ test('G/S: UPDATE existing employee; manual schedule entries preserved', async (
   const code = PFX + 'UPD1';
   await doImport(await buildXlsx(H, [{
     'Codice dipendente': code, Cognome: 'Verdi', Nome: 'Anna',
-    Filiale: 'DLO1', 'Codice turno': 'X', 'Giorni lavorativi': '1,2,3,4,5', Stato: 'active',
+    Filiale: 'DLO1', Servizio: 'DLO1_NEXT', 'Codice turno': 'X', 'Giorni lavorativi': '1,2,3,4,5', Stato: 'active',
   }]));
   const e = await empByCode(code);
   // plant a manual override
@@ -239,6 +246,34 @@ test('I/J/K/L: unknown branch/service/shift and missing required fields are reje
   err(5, /obbligatori/i);                   // L
 });
 
+// ---------- Single-assignment rule: all three required on CREATE ----------
+test('Single-value rule: a new employee missing Servizio or Codice turno is rejected', async (t) => {
+  if (!dbOk) return t.skip('no database');
+  const buf = await buildXlsx(H, [
+    { 'Codice dipendente': PFX + 'NOSVC', Cognome: 'A', Nome: 'A', Filiale: 'DLO1', 'Codice turno': 'X' },   // no Servizio
+    { 'Codice dipendente': PFX + 'NOSHIFT', Cognome: 'B', Nome: 'B', Filiale: 'DLO1', Servizio: 'DLO1_NEXT' }, // no Codice turno
+  ]);
+  const r = await preview(buf);
+  assert.equal(r.body.ok, false, 'rejected');
+  assert.ok(r.body.rows.find((x) => x.row === 2).errors.some((m) => /Servizio obbligatorio/i.test(m)), 'missing Servizio flagged');
+  assert.ok(r.body.rows.find((x) => x.row === 3).errors.some((m) => /Codice turno obbligatorio/i.test(m)), 'missing Codice turno flagged');
+});
+
+test('Single-value rule: multiple/semicolon-separated Filiali are rejected', async (t) => {
+  if (!dbOk) return t.skip('no database');
+  const buf = await buildXlsx(H, [{
+    'Codice dipendente': PFX + 'MULTI', Cognome: 'A', Nome: 'A',
+    Filiale: 'DLO1;DLO7', Servizio: 'DLO1_NEXT', 'Codice turno': 'X',
+  }]);
+  const r = await preview(buf);
+  assert.equal(r.body.ok, false, 'rejected');
+  assert.ok(r.body.rows.find((x) => x.row === 2).errors.some((m) => /una sola Filiale/i.test(m)), 'multiple Filiali flagged');
+  // And nothing is written for such a file.
+  const w = await doImport(buf);
+  assert.equal(w.statusCode, 422, 'import rejected');
+  assert.equal(await empByCode(PFX + 'MULTI'), undefined, 'no employee created');
+});
+
 // ---------- M: preview performs ZERO writes ----------
 test('M: preview does not write anything', async (t) => {
   if (!dbOk) return t.skip('no database');
@@ -253,7 +288,7 @@ test('M: preview does not write anything', async (t) => {
 test('N/O: any invalid row → NOTHING is written (all-or-nothing)', async (t) => {
   if (!dbOk) return t.skip('no database');
   const buf = await buildXlsx(H, [
-    { 'Codice dipendente': PFX + 'TXOK', Cognome: 'Ok', Nome: 'Row', Filiale: 'DLO1', 'Codice turno': 'X' }, // valid
+    { 'Codice dipendente': PFX + 'TXOK', Cognome: 'Ok', Nome: 'Row', Filiale: 'DLO1', Servizio: 'DLO1_NEXT', 'Codice turno': 'X' }, // valid
     { 'Codice dipendente': PFX + 'TXBAD', Cognome: 'Bad', Nome: 'Row', Filiale: 'DLO9' },                     // invalid
   ]);
   const r = await doImport(buf);
@@ -266,8 +301,8 @@ test('N/O: any invalid row → NOTHING is written (all-or-nothing)', async (t) =
 test('N2: a fully valid multi-row import commits atomically (both rows)', async (t) => {
   if (!dbOk) return t.skip('no database');
   const buf = await buildXlsx(H, [
-    { 'Codice dipendente': PFX + 'ATOM1', Cognome: 'A', Nome: 'One', Filiale: 'DLO1', 'Codice turno': 'X' },
-    { 'Codice dipendente': PFX + 'ATOM2', Cognome: 'B', Nome: 'Two', Filiale: 'DLO7', 'Codice turno': 'X' },
+    { 'Codice dipendente': PFX + 'ATOM1', Cognome: 'A', Nome: 'One', Filiale: 'DLO1', Servizio: 'DLO1_NEXT', 'Codice turno': 'X' },
+    { 'Codice dipendente': PFX + 'ATOM2', Cognome: 'B', Nome: 'Two', Filiale: 'DLO7', Servizio: 'DLO1_NEXT', 'Codice turno': 'X' },
   ]);
   const r = await doImport(buf);
   assert.equal(r.statusCode, 200);
@@ -279,17 +314,19 @@ test('U/V: export has readable branch/service/shift values and is formula-inject
   if (!dbOk) return t.skip('no database');
   await doImport(await buildXlsx(H, [{
     'Codice dipendente': PFX + 'EXP', Cognome: '=cmd()', Nome: 'Inj',
-    Filiale: 'DLO1', Filiali: 'DLO7', Servizio: 'DLO1_NEXT', 'Codice turno': 'X', Stato: 'active',
+    Filiale: 'DLO1', Servizio: 'DLO1_NEXT', 'Codice turno': 'X', Stato: 'active',
   }]));
   const r = await runHandler(businessHandler('get', '/export/employees'), mkReq());
   assert.equal(r.statusCode, 200);
-  const { rows } = await parseXlsx(r.buffer);
+  const { headers, rows } = await parseXlsx(r.buffer);
   const row = rows.find((x) => x['Codice dipendente'] === PFX + 'EXP');
   assert.ok(row, 'exported row found');
   assert.equal(row.Filiale, 'DLO1', 'U: readable branch code');
-  assert.equal(row.Filiali, 'DLO7', 'U: additional branch code');
   assert.equal(row.Servizio, 'DLO1_NEXT', 'U: readable service code');
   assert.equal(row['Codice turno'], 'X', 'U: readable shift code');
+  // Export has exactly one Filiale/Servizio/Codice turno — no plural columns.
+  ['Filiali', 'Servizi', 'Codici turno'].forEach((h) =>
+    assert.ok(!headers.includes(h), 'export: plural column absent → ' + h));
   assert.ok(String(row.Cognome).startsWith("'"), 'V: dangerous leading char neutralized');
 });
 

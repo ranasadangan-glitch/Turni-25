@@ -48,9 +48,10 @@ function branchClause(scope, params, col) {
 // the status the app writes). Not master data — a fixed, small enum.
 const EMP_STATUSES = ['active', 'inactive', 'pending'];
 
-// key = the Excel header (exact string in the file). Multi-value columns use a
-// primary + a ";"-separated extras column (see the multi-branch model in
-// database/schema/08_multiselect.sql).
+// key = the Excel header (exact string in the file). Business rule: an employee
+// has EXACTLY ONE Filiale, ONE Servizio and ONE Codice turno — so these are
+// single-value columns (no multi-branch / branch_ids input). All three are
+// required for a new employee.
 const EMP_COLS = [
   { key: 'Codice dipendente', width: 18, note: 'Chiave per CREATE/UPDATE. Vuoto = nuovo dipendente.' },
   { key: 'Cognome', width: 16, required: true },
@@ -59,12 +60,9 @@ const EMP_COLS = [
   { key: 'Telefono', width: 15 },
   { key: 'Transporter ID', width: 16 },
   { key: 'Device', width: 14 },
-  { key: 'Filiale', width: 12, dd: 'branches', requiredOnCreate: true, note: 'Filiale principale (codice).' },
-  { key: 'Filiali', width: 16, dd: 'branches', note: 'Filiali aggiuntive, separate da ";".' },
-  { key: 'Servizio', width: 14, dd: 'services', note: 'Servizio principale (codice).' },
-  { key: 'Servizi', width: 16, dd: 'services', note: 'Servizi aggiuntivi, separati da ";".' },
-  { key: 'Codice turno', width: 12, dd: 'shifts', note: 'Codice turno principale.' },
-  { key: 'Codici turno', width: 16, dd: 'shifts', note: 'Codici turno aggiuntivi, separati da ";".' },
+  { key: 'Filiale', width: 14, dd: 'branches', requiredOnCreate: true, note: 'Filiale (codice). Obbligatoria.' },
+  { key: 'Servizio', width: 14, dd: 'services', requiredOnCreate: true, note: 'Servizio (codice). Obbligatorio.' },
+  { key: 'Codice turno', width: 14, dd: 'shifts', requiredOnCreate: true, note: 'Codice turno. Obbligatorio.' },
   { key: 'Contratto', width: 14, dd: 'contracts', note: 'Codice tipo contratto.' },
   { key: 'Team', width: 16, note: 'Nome team (deve esistere).' },
   { key: 'Giorni lavorativi', width: 16, note: 'Numeri 1-7 separati da virgola (1=Lun). Default 1,2,3,4,5.' },
@@ -92,7 +90,6 @@ function assertXlsx(file) {
 }
 
 const asStr = (v) => (v == null ? '' : String(v).trim());
-const splitMulti = (v) => asStr(v).split(';').map((s) => s.trim()).filter(Boolean);
 
 // Load every master-data lookup the importer/validator needs, once per request.
 async function loadEmpMaster() {
@@ -161,48 +158,42 @@ function validateRow(r, rowNum, master, seenCodes) {
   }
   if (get('Email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(get('Email'))) errors.push('Email non valida');
 
-  // Branches (primary + extras → branch_ids; helper derives branch_id).
-  const bPrimary = get('Filiale');
-  const bExtra = splitMulti(r['Filiali']);
-  if (bPrimary || bExtra.length) {
-    const codes = [bPrimary, ...bExtra].filter(Boolean);
-    const ids = [];
-    for (const c of codes) {
-      const hit = master.branch.get(c.toLowerCase());
-      if (!hit) errors.push(`Filiale ${c} non esistente`);
-      else if (!ids.includes(hit.id)) ids.push(hit.id);
-    }
-    if (ids.length) body.branch_ids = ids;
+  // Filiale — EXACTLY ONE (required for a new employee). Sets the singular
+  // branch_id only; the write helper clears the legacy branch_ids column.
+  // A multi-value (";"-separated) cell is rejected — no multi-filiale employees.
+  const bCode = get('Filiale');
+  if (bCode.includes(';')) {
+    errors.push('Una sola Filiale ammessa (valori multipli non consentiti)');
+  } else if (bCode) {
+    const hit = master.branch.get(bCode.toLowerCase());
+    if (!hit) errors.push(`Filiale ${bCode} non esistente`);
+    else body.branch_id = hit.id;
   } else if (action === 'CREATE') {
     errors.push('Filiale obbligatoria per un nuovo dipendente');
   }
 
-  // Services (primary + extras → service_type_ids).
-  const sPrimary = get('Servizio');
-  const sExtra = splitMulti(r['Servizi']);
-  if (sPrimary || sExtra.length) {
-    const codes = [sPrimary, ...sExtra].filter(Boolean);
-    const ids = [];
-    for (const c of codes) {
-      const hit = master.service.get(c.toLowerCase());
-      if (!hit) errors.push(`Servizio ${c} non esistente`);
-      else if (!ids.includes(hit.id)) ids.push(hit.id);
-    }
-    if (ids.length) body.service_type_ids = ids;
+  // Servizio — EXACTLY ONE (required for a new employee).
+  const sCode = get('Servizio');
+  if (sCode.includes(';')) {
+    errors.push('Un solo Servizio ammesso (valori multipli non consentiti)');
+  } else if (sCode) {
+    const hit = master.service.get(sCode.toLowerCase());
+    if (!hit) errors.push(`Servizio ${sCode} non esistente`);
+    else body.service_type_id = hit.id;
+  } else if (action === 'CREATE') {
+    errors.push('Servizio obbligatorio per un nuovo dipendente');
   }
 
-  // Shift codes (primary + extras → default_shift_codes; TEXT codes).
-  const shPrimary = get('Codice turno');
-  const shExtra = splitMulti(r['Codici turno']);
-  if (shPrimary || shExtra.length) {
-    const codes = [shPrimary, ...shExtra].filter(Boolean);
-    const out = [];
-    for (const c of codes) {
-      const canon = master.shiftCanon.get(c.toLowerCase());
-      if (!canon) errors.push(`Codice turno ${c} non esistente`);
-      else if (!out.includes(canon)) out.push(canon);
-    }
-    if (out.length) body.default_shift_codes = out;
+  // Codice turno — EXACTLY ONE (required for a new employee). TEXT code.
+  const shCode = get('Codice turno');
+  if (shCode.includes(';')) {
+    errors.push('Un solo Codice turno ammesso (valori multipli non consentiti)');
+  } else if (shCode) {
+    const canon = master.shiftCanon.get(shCode.toLowerCase());
+    if (!canon) errors.push(`Codice turno ${shCode} non esistente`);
+    else body.default_shift_code = canon;
+  } else if (action === 'CREATE') {
+    errors.push('Codice turno obbligatorio per un nuovo dipendente');
   }
 
   // Contract type (code → id).
@@ -339,9 +330,8 @@ async function buildEmployeeTemplate() {
   line('', '• codice già esistente → aggiorna il dipendente');
   line('', 'Nell\'UPDATE le celle vuote mantengono il valore attuale.');
   isn.addRow([]);
-  line('Obbligatori', 'Cognome, Nome. Per i nuovi dipendenti anche Filiale.');
-  line('Filiali multiple', 'Filiale = principale; Filiali = aggiuntive separate da ";".');
-  line('Servizi/Codici', 'Stessa logica: Servizio/Codice turno = principale; plurale = extra ";".');
+  line('Obbligatori', 'Cognome, Nome. Per i nuovi dipendenti anche Filiale, Servizio e Codice turno.');
+  line('Assegnazione', 'Ogni dipendente ha esattamente UNA Filiale, UN Servizio e UN Codice turno.');
   line('Giorni lavorativi', 'Numeri 1-7 separati da virgola (1=Lun … 7=Dom).');
   line('Date', 'Formato AAAA-MM-GG.');
   line('Stato', EMP_STATUSES.join(' | ') + ' (default active).');
@@ -561,8 +551,7 @@ router.get('/export/employees', requirePermission('employee.view'), async (req, 
   const [emps, branches, services] = await Promise.all([
     pool.query(
       `SELECT e.employee_code, e.last_name, e.first_name, e.email, e.phone, e.transporter_id, e.device,
-              e.branch_id, e.branch_ids, e.service_type_id, e.service_type_ids,
-              e.default_shift_code, e.default_shift_codes,
+              e.branch_id, e.service_type_id, e.default_shift_code,
               ct.code AS contract_code, t.name AS team_name,
               e.work_days, e.hire_date, e.contract_start_date, e.contract_end_date, e.status
          FROM employees e
@@ -574,32 +563,16 @@ router.get('/export/employees', requirePermission('employee.view'), async (req, 
   ]);
   const bCode = new Map(branches.rows.map((r) => [r.id, r.code]));
   const sCode = new Map(services.rows.map((r) => [r.id, r.code]));
-
-  // primary = the singular column; extras = the array minus the primary, so a
-  // re-import (Filiale + Filiali) reproduces the same set.
-  const primaryAndExtra = (primaryId, ids, codeMap) => {
-    const arr = Array.isArray(ids) ? ids : (primaryId != null ? [primaryId] : []);
-    const codes = arr.map((id) => codeMap.get(id)).filter(Boolean);
-    const primary = primaryId != null ? codeMap.get(primaryId) : codes[0];
-    const extra = codes.filter((c) => c !== primary);
-    return { primary: primary || '', extra: extra.join(';') };
-  };
-  const shiftPrimaryExtra = (primary, arr) => {
-    const all = Array.isArray(arr) && arr.length ? arr : (primary ? [primary] : []);
-    const p = primary || all[0] || '';
-    return { primary: p, extra: all.filter((c) => c !== p).join(';') };
-  };
   const d = (v) => (v ? String(v).slice(0, 10) : '');
 
+  // Exactly one Filiale / Servizio / Codice turno per employee (business rule).
   const out = emps.rows.map((e) => {
-    const b = primaryAndExtra(e.branch_id, e.branch_ids, bCode);
-    const s = primaryAndExtra(e.service_type_id, e.service_type_ids, sCode);
-    const sh = shiftPrimaryExtra(e.default_shift_code, e.default_shift_codes);
     const row = {
       'Codice dipendente': e.employee_code || '', Cognome: e.last_name || '', Nome: e.first_name || '',
       Email: e.email || '', Telefono: e.phone || '', 'Transporter ID': e.transporter_id || '', Device: e.device || '',
-      Filiale: b.primary, Filiali: b.extra, Servizio: s.primary, Servizi: s.extra,
-      'Codice turno': sh.primary, 'Codici turno': sh.extra,
+      Filiale: (e.branch_id != null ? bCode.get(e.branch_id) : '') || '',
+      Servizio: (e.service_type_id != null ? sCode.get(e.service_type_id) : '') || '',
+      'Codice turno': e.default_shift_code || '',
       Contratto: e.contract_code || '', Team: e.team_name || '',
       'Giorni lavorativi': Array.isArray(e.work_days) ? e.work_days.join(',') : '',
       'Data assunzione': d(e.hire_date), 'Data inizio contratto': d(e.contract_start_date),

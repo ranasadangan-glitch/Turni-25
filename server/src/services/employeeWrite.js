@@ -20,11 +20,20 @@ const FIELDS = ['employee_code', 'transporter_id', 'first_name', 'last_name', 'e
   'emergency_name', 'emergency_phone', 'notes', 'photo_url', 'nationality', 'tax_code',
   'branch_ids', 'service_type_ids', 'default_shift_codes'];
 
-// Branch / service / shift code are multi-valued in the UI but the singular
-// columns are still what RBAC scoping, the planner and the Excel export read.
-// Keep them in step: the primary value is always the first of the array.
-// Only touched when the client actually sent the array, so partial updates
-// (e.g. PATCH-style saves of unrelated fields) never clobber it.
+// Business rule: an employee has EXACTLY ONE Filiale, ONE Servizio and ONE
+// Codice turno. The singular columns (branch_id / service_type_id /
+// default_shift_code) are the ONLY source of truth (read by RBAC scoping, the
+// planner and the Excel export). The legacy multi-value array columns
+// (branch_ids / service_type_ids / default_shift_codes) are NEVER populated:
+// whenever an assignment is written they are cleared to NULL, so no multi-branch
+// data is created and the array can never contradict the singular value. The
+// columns are left in place (no destructive migration); the scheduler roster
+// matches on branch_id, so clearing the arrays does not affect visibility.
+//
+// Callers may supply either side: the employee form may send the array (a single
+// selection), the Excel importer sends the singular. Whichever arrives, collapse
+// to exactly one value, write the singular and NULL the array. A field absent
+// from the write is left untouched, so partial updates never clobber it.
 function syncPrimaryFromArrays(b) {
   const pairs = [
     ['branch_ids', 'branch_id'],
@@ -32,10 +41,19 @@ function syncPrimaryFromArrays(b) {
     ['default_shift_codes', 'default_shift_code'],
   ];
   for (const [arrKey, oneKey] of pairs) {
-    if (b[arrKey] === undefined) continue;
-    const arr = Array.isArray(b[arrKey]) ? b[arrKey].filter((v) => v !== null && v !== '') : [];
-    b[arrKey] = arr.length ? arr : null;
-    b[oneKey] = arr.length ? arr[0] : null;
+    const arrGiven = b[arrKey] !== undefined;
+    const oneGiven = b[oneKey] !== undefined;
+    if (!arrGiven && !oneGiven) continue;   // field not part of this write
+    // Resolve to a single value: explicit singular wins, else first array entry.
+    let one = null;
+    if (oneGiven && b[oneKey] !== null && b[oneKey] !== '') {
+      one = b[oneKey];
+    } else if (arrGiven) {
+      const arr = Array.isArray(b[arrKey]) ? b[arrKey].filter((v) => v !== null && v !== '') : [];
+      one = arr.length ? arr[0] : null;
+    }
+    b[oneKey] = one;
+    b[arrKey] = null;   // never populate the legacy multi-value column
   }
   return b;
 }
