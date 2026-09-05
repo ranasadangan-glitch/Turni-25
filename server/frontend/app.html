@@ -582,6 +582,12 @@
               <span id="empCount" class="text-sm text-muted">—</span>
               <button class="btn btn-primary btn-sm" data-act-click="call" data-call="openNewEmployee">+ Nuovo</button>
             </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+              <button class="btn btn-ghost btn-sm" data-act-click="call" data-call="empImportExcel">⬆ Importa Excel</button>
+              <button class="btn btn-ghost btn-sm" data-act-click="call" data-call="empExportExcel">⬇ Esporta Excel</button>
+              <button class="btn btn-ghost btn-sm" data-act-click="call" data-call="empDownloadTemplate">📄 Scarica Template</button>
+              <input type="file" id="empXlsxFile" accept=".xlsx" data-act-change="call" data-call="empXlsxPicked" data-args="[&quot;@event&quot;]" hidden>
+            </div>
           </div>
           <div class="people-sidebar-body emp-list" id="empList">
             <div style="padding:20px" class="skel" style="height:40px;border-radius:8px;margin:8px"></div>
@@ -859,6 +865,21 @@
     <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
     <h2>Seleziona filiale</h2>
     <div id="filPickList" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ── People: anteprima import Excel ── -->
+<div class="overlay" id="empXlsxModal" role="dialog" aria-modal="true">
+  <div class="obox" style="max-width:820px">
+    <button class="obox-close" data-act-click="call" data-call="closeAll">✕</button>
+    <h2>Anteprima import dipendenti</h2>
+    <div id="empXlsxSummary" class="text-sm" style="margin:8px 0 12px"></div>
+    <div id="empXlsxPreview" style="max-height:52vh;overflow:auto;border:1px solid var(--border,#ddd);border-radius:8px"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px">
+      <div id="empXlsxMsg" class="text-sm" style="flex:1;color:var(--bad)"></div>
+      <button class="btn btn-ghost" data-act-click="call" data-call="closeAll">Annulla</button>
+      <button class="btn btn-primary" id="empXlsxConfirm" data-act-click="call" data-call="empXlsxConfirm">⬆ Conferma import</button>
+    </div>
   </div>
 </div>
 

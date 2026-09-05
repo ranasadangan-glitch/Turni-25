@@ -245,6 +245,9 @@
     xlsxExportUrl: (type, q = {}) => Api.fileUrl('/xlsx/export/' + type + '?' + new URLSearchParams(q)),
     pdfUrl: (path, q = {}) => Api.fileUrl('/pdf/' + path + '?' + new URLSearchParams(q)),
     xlsxImport: (type, file) => { const fd = new FormData(); fd.append('file', file); return req('POST', '/xlsx/import/' + type, fd, true); },
+    // Employee Excel import: preview (validate only, no writes) then confirm.
+    xlsxEmployeesPreview: (file) => { const fd = new FormData(); fd.append('file', file); return req('POST', '/xlsx/import/employees/preview', fd, true); },
+    xlsxImportEmployees: (file) => { const fd = new FormData(); fd.append('file', file); return req('POST', '/xlsx/import/employees', fd, true); },
     // Import variant that also carries context fields (e.g. month/branch for
     // the scheduler forecast grid, which isn't inferable from the file alone).
     xlsxImportWith: (type, file, fields) => {

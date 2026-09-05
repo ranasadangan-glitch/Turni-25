@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const { auth, loadScope, audit } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
 const { regenerateEmployee } = require('../services/autoschedule');
+const { FIELDS, createEmployee, updateEmployee } = require('../services/employeeWrite');
 
 // Per-employee auto-regeneration (spec: real-time sync — profile changes must
 // reflect in the scheduler with no manual action). Awaited BEFORE the HTTP
@@ -60,32 +61,9 @@ router.get('/', async (req, res) => {
   res.json(rows);
 });
 
-const FIELDS = ['employee_code','transporter_id','first_name','last_name','email','phone','device',
-  'branch_id','team_id','service_type_id','contract_type_id','default_shift_code',
-  'work_days','hire_date','contract_start_date','contract_end_date','status',
-  'emergency_name','emergency_phone','notes','photo_url','nationality','tax_code',
-  // Multi-select counterparts (see database/schema/08_multiselect.sql)
-  'branch_ids','service_type_ids','default_shift_codes'];
-
-// Branch / service / shift code are multi-valued in the UI but the singular
-// columns are still what RBAC scoping, the planner and the Excel export read.
-// Keep them in step: the primary value is always the first of the array.
-// Only touched when the client actually sent the array, so partial updates
-// (e.g. PATCH-style saves of unrelated fields) never clobber it.
-function syncPrimaryFromArrays(b) {
-  const pairs = [
-    ['branch_ids', 'branch_id'],
-    ['service_type_ids', 'service_type_id'],
-    ['default_shift_codes', 'default_shift_code'],
-  ];
-  for (const [arrKey, oneKey] of pairs) {
-    if (b[arrKey] === undefined) continue;
-    const arr = Array.isArray(b[arrKey]) ? b[arrKey].filter((v) => v !== null && v !== '') : [];
-    b[arrKey] = arr.length ? arr : null;
-    b[oneKey] = arr.length ? arr[0] : null;
-  }
-  return b;
-}
+// The employee field whitelist and array/primary sync now live in the shared
+// canonical write helper (services/employeeWrite.js), so the Excel importer and
+// these routes use the exact same write path — never two copies.
 
 // GET /api/employees/:id — single employee with full profile
 router.get('/:id', async (req, res) => {
@@ -120,33 +98,21 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/employees  (admin)
 router.post('/', requirePermission('employee.manage'), async (req, res) => {
-  const b = syncPrimaryFromArrays(req.body || {});
-  const cols = FIELDS.filter((f) => b[f] !== undefined);
-  const vals = cols.map((f) => b[f]);
-  const ph = cols.map((_, i) => '$' + (i + 1));
-  const { rows } = await pool.query(
-    `INSERT INTO employees (${cols.join(',')}, added_by) VALUES (${ph.join(',')}, $${cols.length + 1}) RETURNING *`,
-    [...vals, req.user.username]
-  );
-  await audit(req, 'employee', rows[0].id, 'create', `${rows[0].first_name} ${rows[0].last_name}`);
-  await autoRegen(rows[0].id, req.user.username);   // new employee → working days materialize
-  res.status(201).json(rows[0]);
+  const row = await createEmployee(req.body || {}, req.user.username);   // canonical write path
+  await audit(req, 'employee', row.id, 'create', `${row.first_name} ${row.last_name}`);
+  await autoRegen(row.id, req.user.username);   // new employee → working days materialize
+  res.status(201).json(row);
 });
 
 // PUT /api/employees/:id  (admin)
 router.put('/:id', requirePermission('employee.manage'), async (req, res) => {
-  const b = syncPrimaryFromArrays(req.body || {});
-  const cols = FIELDS.filter((f) => b[f] !== undefined);
-  if (!cols.length) return res.status(400).json({ error: 'Nessun campo' });
-  const sets = cols.map((f, i) => `${f}=$${i + 1}`);
-  const { rows } = await pool.query(
-    `UPDATE employees SET ${sets.join(',')} WHERE id=$${cols.length + 1} RETURNING *`,
-    [...cols.map((f) => b[f]), req.params.id]
-  );
-  if (!rows[0]) return res.status(404).json({ error: 'Non trovato' });
-  await audit(req, 'employee', req.params.id, 'update', `${rows[0].first_name} ${rows[0].last_name}`);
-  await autoRegen(rows[0].id, req.user.username);   // contract/work-days change → future shifts regenerate
-  res.json(rows[0]);
+  const b = req.body || {};
+  if (!FIELDS.some((f) => b[f] !== undefined)) return res.status(400).json({ error: 'Nessun campo' });
+  const row = await updateEmployee(req.params.id, b, req.user.username);   // canonical write path
+  if (!row) return res.status(404).json({ error: 'Non trovato' });
+  await audit(req, 'employee', req.params.id, 'update', `${row.first_name} ${row.last_name}`);
+  await autoRegen(row.id, req.user.username);   // contract/work-days change → future shifts regenerate
+  res.json(row);
 });
 
 // PATCH /api/employees/:id/status  { status }  (admin) — disable instead of delete

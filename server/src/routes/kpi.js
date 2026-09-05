@@ -357,10 +357,10 @@ router.get('/', async (req, res) => {
     const brC = branch ? `'${branch.replace(/'/g,"''")}'` : null;
     const r = await pool.query(`
       WITH hr AS (
-        SELECT date_trunc('month', created_at)::date AS month, count(*)::int AS added
+        SELECT date_trunc('month', e.created_at)::date AS month, count(*)::int AS added
           FROM employees e
           LEFT JOIN branches b ON b.id = e.branch_id
-         WHERE created_at >= now() - interval '12 months'
+         WHERE e.created_at >= now() - interval '12 months'
            ${brC ? `AND b.code = ${brC}` : ''}
          GROUP BY 1
       ),

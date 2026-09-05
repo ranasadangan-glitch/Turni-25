@@ -566,3 +566,91 @@ async function saveEmployee(andNew) {
   }
 }
 
+// ── Excel import / export / template ──────────────────────────────
+let _empXlsxFile = null;
+
+// Downloads use token-in-URL GET endpoints (Content-Disposition: attachment),
+// so navigating triggers a download without leaving the page.
+window.empExportExcel = function () {
+  try { window.location.href = TurniApi.xlsxExportUrl('employees'); }
+  catch (e) { toast('Export non riuscito', 'bad'); }
+};
+window.empDownloadTemplate = function () {
+  try { window.location.href = TurniApi.xlsxTemplateUrl('employees'); }
+  catch (e) { toast('Download template non riuscito', 'bad'); }
+};
+
+// Import: open the file picker → preview → confirm.
+window.empImportExcel = function () {
+  const inp = document.getElementById('empXlsxFile');
+  if (inp) { inp.value = ''; inp.click(); }
+};
+
+window.empXlsxPicked = async function (ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (!/\.xlsx$/i.test(file.name)) { toast('Seleziona un file .xlsx', 'bad'); return; }
+  _empXlsxFile = file;
+  const msg = document.getElementById('empXlsxMsg');
+  const sum = document.getElementById('empXlsxSummary');
+  const prev = document.getElementById('empXlsxPreview');
+  const confirmBtn = document.getElementById('empXlsxConfirm');
+  msg.textContent = '';
+  sum.textContent = 'Analisi in corso…';
+  prev.innerHTML = '';
+  document.getElementById('empXlsxModal').classList.add('on');
+  try {
+    const r = await TurniApi.xlsxEmployeesPreview(file);
+    _renderEmpXlsxPreview(r);
+    confirmBtn.disabled = !r.ok;
+  } catch (e) {
+    sum.textContent = '';
+    msg.textContent = e.message || 'Anteprima non riuscita';
+    confirmBtn.disabled = true;
+  }
+};
+
+function _renderEmpXlsxPreview(r) {
+  const s = r.summary || { create: 0, update: 0, errors: 0, total: 0 };
+  document.getElementById('empXlsxSummary').innerHTML =
+    '<b>' + s.create + '</b> da creare · <b>' + s.update + '</b> da aggiornare · ' +
+    '<b style="color:' + (s.errors ? 'var(--bad)' : 'var(--ok,green)') + '">' + s.errors + '</b> con errori' +
+    (r.ok ? '' : ' — <span style="color:var(--bad)">correggi il file e ricarica</span>');
+  const rows = (r.rows || []).map(function (x) {
+    const bad = x.status === 'ERRORE';
+    return '<tr style="' + (bad ? 'background:rgba(220,50,50,.08)' : '') + '">' +
+      '<td style="padding:4px 8px">' + x.row + '</td>' +
+      '<td style="padding:4px 8px">' + esc(x.code || '') + '</td>' +
+      '<td style="padding:4px 8px">' + esc(x.action) + '</td>' +
+      '<td style="padding:4px 8px;font-weight:600;color:' + (bad ? 'var(--bad)' : 'var(--ok,green)') + '">' + esc(x.status) + '</td>' +
+      '<td style="padding:4px 8px;color:var(--bad)">' + esc((x.errors || []).join('; ')) + '</td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('empXlsxPreview').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:.82rem">' +
+    '<thead><tr style="position:sticky;top:0;background:var(--card,#fff);text-align:left">' +
+    '<th style="padding:6px 8px">Riga</th><th style="padding:6px 8px">Codice</th>' +
+    '<th style="padding:6px 8px">Azione</th><th style="padding:6px 8px">Stato</th>' +
+    '<th style="padding:6px 8px">Errori</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+window.empXlsxConfirm = async function () {
+  if (!_empXlsxFile) return;
+  const msg = document.getElementById('empXlsxMsg');
+  const confirmBtn = document.getElementById('empXlsxConfirm');
+  msg.textContent = ''; confirmBtn.disabled = true;
+  try {
+    const r = await TurniApi.xlsxImportEmployees(_empXlsxFile);
+    _empXlsxFile = null;
+    closeAll();
+    await loadEmployees();
+    if (typeof syncSchedulerFromDB === 'function') syncSchedulerFromDB();
+    toast('Import completato: ' + (r.created || 0) + ' creati, ' + (r.updated || 0) + ' aggiornati');
+  } catch (e) {
+    // Server re-validates and rejects on any error (all-or-nothing). Keep the
+    // modal open so the user can fix the file and retry.
+    msg.textContent = e.message || 'Import non eseguito';
+    confirmBtn.disabled = false;
+  }
+};
+
